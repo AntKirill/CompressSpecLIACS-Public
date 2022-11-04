@@ -186,10 +186,10 @@ if __name__ == '__main__':
     selection = instrument.filterguess()
     
     # Methane concentration should be [0,2000], typical: 1500
-    nCH4 = 100
-    n = 100
+    nCH4 = 1500
+    n = 25
     starttime = time.perf_counter()
-    relative_fitprecision, relative_fitbias,  = instrument.simulateMeasurement(selection, nCH4 = 1000, n = 100)
+    relative_fitprecision, relative_fitbias,  = instrument.simulateMeasurement(selection, nCH4 = nCH4, n = n)
     print(f'Fitting of {n} measurements took {1000*(time.perf_counter() - starttime):.1f}ms')
     print(f'bias = {100*relative_fitbias:.1f}%, precision = {100*relative_fitprecision:.1f}%')
     
