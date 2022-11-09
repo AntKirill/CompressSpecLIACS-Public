@@ -104,11 +104,8 @@ class RadianceModel():
     omega0 = c / lambda0    # 1/s
     
     
-    def __init__(self, lambda_min = 1625, lambda_max = 1670, lambda_n = 225, sza = 0.1, vza = 0 ):
+    def __init__(self, lambda_min = 1625, lambda_max = 1670, lambda_n = 225):
         
-        # instrument and sun zenith angles
-        self.vza = vza
-        self.sza = sza
         
         # spectral range
         self.spectral_range = np.linspace(lambda_min, lambda_max, lambda_n)
@@ -178,7 +175,7 @@ class RadianceModel():
         
 
         
-    def getRadiance(self, nCH4, albedo = 0.15):
+    def getRadiance(self, nCH4, albedo, sza = 10, vza = 0):
         # Define input concentrtions for methane
         nCH4 = nCH4 * 2900e12
         
@@ -192,8 +189,8 @@ class RadianceModel():
                     + (self.sigma[4,:,:]@self.nCH4[0:nLayer,0])
         
         #Calculate radiance
-        rair = f_young(self.sza) + f_young(self.vza)
-        consTerm = albedo * np.cos(math.radians(self.sza)) / np.pi
+        rair = f_young(sza) + f_young(vza)
+        consTerm = albedo * np.cos(math.radians(sza)) / np.pi
         tau_lambda = rair * tau_vert
         self.radiance = consTerm * np.exp(-1 * tau_lambda) * self.irradiance# * 1.0e3 * self.h_bar * self.omega0
         
@@ -205,8 +202,11 @@ if __name__ == "__main__":
     
     radiancemodel = RadianceModel()
     nCH4 = 1000
-    spectrum, spectral_range = radiancemodel.getRadiance(nCH4,0.15)
-
+    albedo = 0.75
+    sza = 10
+    spectrum, spectral_range = radiancemodel.getRadiance(nCH4,albedo, sza)
+    radiance = spectrum * 1.0e3 * radiancemodel.h_bar * radiancemodel.omega0
+    
     plt.figure(dpi = 300)
     plt.plot(spectral_range,spectrum)
     plt.ylabel("Radiance [ph/(s sr nm m2)]")
