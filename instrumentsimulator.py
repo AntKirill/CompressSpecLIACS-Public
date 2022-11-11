@@ -189,9 +189,18 @@ class InstrumentSimulator():
             smoothness[i] = residuals
 
         nfilters = 160
-        selection = np.argpartition(smoothness, -nfilters)[-nfilters:]
-        selection = np.repeat(selection, 4)
-        return selection
+        selection1 = np.argpartition(smoothness, -nfilters)[-nfilters:]
+        selection1 = np.repeat(selection1, 4)
+        
+        Tfft = np.fft.rfft(self.filterlibrary, axis = 1)
+        wavelength_fft = np.fft.rfftfreq(self.wavelength_n,1)
+        Tfft_width = np.sum(np.abs(Tfft)**2 * (wavelength_fft[None,:]/1e9)**2, axis = 1)
+        selection2 =  np.argpartition(Tfft_width, -nfilters)[-nfilters:]
+        selection2 = np.repeat(selection2, 4)
+        
+        # selection = np.repeat(np.vstack((selection1, selection2)), 2)
+
+        return selection2
 
     def getTransmissionMatrix(self, selection):
         assert len(selection) == self.instrumentsettings.detector.npxl_alt,\
@@ -208,7 +217,8 @@ class InstrumentSimulator():
                                                                   self.instrumentsettings.sza,
                                                                   self.instrumentsettings.vza)
         self.radiance = radiance
-
+        self.spectral_range = spectral_range
+        
         self.signal = self._getSignal(nCH4, albedo)
 
         self.noise = np.sqrt(self.signal + self.instrumentsettings.detector.readnoise**2 +
@@ -288,10 +298,11 @@ if __name__ == '__main__':
     albedo = 0.15
 
     # low sun zenith angle is 70 degrees, high sza = 10
-    sza = 10
+    sza = 70
 
     # number of noisy realizations
     n = 1000
+    
     #%%
     # retrieve methane
     relative_fitprecision, relative_fitbias,  = instrument.simulateMeasurement(
@@ -301,4 +312,7 @@ if __name__ == '__main__':
     #%%
     selectedfilters = instrument.getTransmissionMatrix(selection)
     fig = plt.figure(dpi=300)
-    plt.plot(selectedfilters.T)
+    plt.plot(instrument.spectral_range,selectedfilters.T[:,::4])
+    plt.xlabel('wavelength (nm)')
+    plt.ylabel('transmission')
+    plt.title('Transmission profiles')

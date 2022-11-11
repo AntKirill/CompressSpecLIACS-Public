@@ -43,7 +43,7 @@ plt.xlabel('albedo')
 plt.ylabel('relative precision (%)')
 plt.title(f'Methane retrieval, {nCH4} ppb')
 plt.grid('major')
-
+plt.ylim([0,2])
 
 #%%
 n = 500
