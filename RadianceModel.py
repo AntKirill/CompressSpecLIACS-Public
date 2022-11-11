@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 30 15:46:38 2022
+Radiance model of the earth athmosphere.
+Based on absorption lines of (traces) gases and the irradiance from the sun a
+radiance spectum is computed.
 
-Adaptation of the code from Menno Hagenaar to make it more readable
 
-@author: Johannes
+@author: Marijn Siemons
+date: 11-11-2022
 """
 
 import os

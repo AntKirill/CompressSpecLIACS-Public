@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Nov  4 08:58:57 2022
+Instrument Simulator for spectrometer instrument based on photonic crystals
 
-@author: marijns
+@author: Marijn Siemons
+date: 11-11-2022
+
 """
 import numpy as np
 from dataclasses import dataclass
@@ -10,8 +12,8 @@ from RadianceModel import RadianceModel
 import os
 import csv
 from scipy import optimize
-import pandas as pd
 import time
+
 module_directory = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -76,7 +78,18 @@ class InstrumentSimulator():
         self.loadFilterLibrary()
         self.loadRadianceModel()
 
-    def loadOptimizedFilterset(self):
+    def loadOldOptimizedFilterset(self):
+        """
+        Loads the old optimized filter set, based on the code of Menno Hagenaar
+        DO NOT USE, unless for comparison.
+        
+        Returns
+        -------
+        None.
+
+        """
+        import pandas as pd
+        
         filtersPath = os.path.join(
             module_directory, "FilterLibrary/optimized_set_200_filters_225.txt")
         data_string = [
@@ -127,6 +140,15 @@ class InstrumentSimulator():
         self.filterlibrary = transmissionmatrix
 
     def loadFilterLibrary(self):
+        """
+        Loads the filter library.
+
+        Returns
+        -------
+        None.
+
+        """
+        
         shapes = ['circle', 'cross', 'cross-hw',
                   'octagon', 'square', 'square-bcc']
 
@@ -175,34 +197,54 @@ class InstrumentSimulator():
         
 
     def loadRadianceModel(self):
+        """
+        Initializes the Radiance model and athmosphere data.
+
+        Returns
+        -------
+        None.
+
+        """
         print('Loading radiance model...')
         self.radiancemodel = RadianceModel(lambda_min=1625,
                                            lambda_max=1670,
                                            lambda_n=225)
 
     def filterguess(self):
-        smoothness = np.zeros(len(self.structlabels))
-        spectral_range = np.linspace(0, 1, self.filterlibrary.shape[1])
-        for i in range(len(self.structlabels)):
-            p, residuals, rank, singular_values, rcond = np.polyfit(
-                spectral_range, self.filterlibrary[i, :], 5, full=True)
-            smoothness[i] = residuals
+        """
+        Initial guess of a filter set, based on the second moment of the FT of 
+        the transmission profiles. 160 filters are selected and repeated 4 times.
 
+        Returns
+        -------
+        selection : array
+            list of the indexes of the selected filters
+
+        """
         nfilters = 160
-        selection1 = np.argpartition(smoothness, -nfilters)[-nfilters:]
-        selection1 = np.repeat(selection1, 4)
-        
         Tfft = np.fft.rfft(self.filterlibrary, axis = 1)
         wavelength_fft = np.fft.rfftfreq(self.wavelength_n,1)
         Tfft_width = np.sum(np.abs(Tfft)**2 * (wavelength_fft[None,:]/1e9)**2, axis = 1)
-        selection2 =  np.argpartition(Tfft_width, -nfilters)[-nfilters:]
-        selection2 = np.repeat(selection2, 4)
-        
-        # selection = np.repeat(np.vstack((selection1, selection2)), 2)
-
-        return selection2
+        selection =  np.argpartition(Tfft_width, -nfilters)[-nfilters:]
+        selection = np.repeat(selection, 4)
+ 
+        return selection
 
     def getTransmissionMatrix(self, selection):
+        """
+        Creates the transmission based on the list of indexes (selection)
+
+        Parameters
+        ----------
+        selection : array
+            list of indexes of the selected filters.
+
+        Returns
+        -------
+        transmissionmatrix : 2D array
+            The transmission matrix.
+
+        """
         assert len(selection) == self.instrumentsettings.detector.npxl_alt,\
             f'Selection incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
         transmissionmatrix = self.filterlibrary[selection, :]
@@ -210,6 +252,36 @@ class InstrumentSimulator():
         return transmissionmatrix
 
     def simulateMeasurement(self, selection, nCH4=1500, albedo=0.15, sza = 10, noise=True, n=100, verbose=False):
+        """
+        Simulates a series of measurements for the given condition.
+
+        Parameters
+        ----------
+        selection : array
+            list of choosen filters.
+        nCH4 : float, optional
+            Methane concentration in ppb. The default is 1500.
+        albedo : float, optional
+            The albedo, should be between 0.15 and 0.75. The default is 0.15.
+        sza : float, optional
+            The sun zenith angle in degrees, should be between 10 and 70.
+            The default is 10.
+        noise : boolean, optional
+            Flag to include in noise in measurements. The default is True.
+        n : int, optional
+            Number of noisy measurements. The default is 100.
+        verbose : bool, optional
+            Flag to plot information. The default is False.
+
+        Returns
+        -------
+        relative_fitprecision : float
+            The relative methane fit precision .
+        relative_fitbias : float
+            The relative bias in the estimated methane concentration.
+
+        """
+        
         self.instrumentsettings.sza = sza
         
         self.transmissionmatrix = self.getTransmissionMatrix(selection)
@@ -254,6 +326,22 @@ class InstrumentSimulator():
         return relative_fitprecision, relative_fitbias
 
     def _getSignal(self, nCH4, albedo):
+        """
+        Generates a camera signal
+
+        Parameters
+        ----------
+        nCH4 : float
+            methane concentation in ppb.
+        albedo : float
+            Albedo of the scene.
+
+        Returns
+        -------
+        signal : array
+            Signal intensity as measured by the camera.
+
+        """
         radiance, spectral_range = self.radiancemodel.getRadiance(nCH4, albedo, sza=self.instrumentsettings.sza,
                                                                   vza=self.instrumentsettings.vza)
         signal = np.dot(self.transmissionmatrix, radiance) \
@@ -264,11 +352,43 @@ class InstrumentSimulator():
         return signal
 
     def _getFiterror(self, params, tmp, signal_noisy):
+        """
+        Returns the fit error.
+
+        Parameters
+        ----------
+        params : (nCH4, albedo)
+            Tuple containing the (estimated) methane concentration and albedo.
+        tmp : empty
+            Not used.
+        signal_noisy : array
+            Noise corrupted signal measured by the camera.
+
+        Returns
+        -------
+        fit error : float
+            fit error between the estimated signal and the noise corrupted signal.
+
+        """
         nCH4, albedo = params
         signalfit = self._getSignal(nCH4, albedo)
         return signalfit - signal_noisy
 
     def _fitMethane(self, signal_noisy):
+        """
+        Performs the methane fit.
+
+        Parameters
+        ----------
+        signal_noisy : array
+            Noise corrupted signal measured by the camera.
+
+        Returns
+        -------
+        nCH4 : float
+            fitted methane concentration in ppb.
+
+        """
         p0 = [1000, 0.2]
         fit = optimize.least_squares(
             self._getFiterror, p0, args=([], signal_noisy))
@@ -278,19 +398,17 @@ class InstrumentSimulator():
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from scipy.special import gamma
+
     instrumentsettings = InstrumentSettings()
     instrument = InstrumentSimulator(instrumentsettings)
 
     print(f'Filter library size: {instrument.filterlibrarysize}')
+    
     #%%
     # Example of how to select filters
     # selection = np.random.randint(0,instrument.filterlibrarysize, size = 640)
     selection = instrument.filterguess()
-    # instrument.loadOptimizedFilterset()
-    # selection = np.linspace(0,199.99,640, dtype = int)
-    
-    
+
     # Methane concentration should be [0,2000], typical: 1500
     nCH4 = 1500
 
@@ -303,13 +421,12 @@ if __name__ == '__main__':
     # number of noisy realizations
     n = 1000
     
-    #%%
     # retrieve methane
     relative_fitprecision, relative_fitbias,  = instrument.simulateMeasurement(
         selection, nCH4=nCH4, albedo=albedo, sza = sza, n=n, verbose=True)
     print(
         f'bias = {100*relative_fitbias:.1f}%, precision = {100*relative_fitprecision:.2f}%')
-    #%%
+
     selectedfilters = instrument.getTransmissionMatrix(selection)
     fig = plt.figure(dpi=300)
     plt.plot(instrument.spectral_range,selectedfilters.T[:,::4])
