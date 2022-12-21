@@ -6,6 +6,7 @@ Instrument Simulator for spectrometer instrument based on photonic crystals
 date: 11-11-2022
 
 """
+
 import numpy as np
 from dataclasses import dataclass
 from RadianceModel import RadianceModel
@@ -37,6 +38,7 @@ class InstrumentSettings:
     sza: float = 70
     vza: float = 0
     detector = Detector()
+    spatialbinning: int = 5
 
 
 class InstrumentSimulator():
@@ -82,14 +84,14 @@ class InstrumentSimulator():
         """
         Loads the old optimized filter set, based on the code of Menno Hagenaar
         DO NOT USE, unless for comparison.
-        
+
         Returns
         -------
         None.
 
         """
         import pandas as pd
-        
+
         filtersPath = os.path.join(
             module_directory, "FilterLibrary/optimized_set_200_filters_225.txt")
         data_string = [
@@ -148,7 +150,7 @@ class InstrumentSimulator():
         None.
 
         """
-        
+
         shapes = ['circle', 'cross', 'cross-hw',
                   'octagon', 'square', 'square-bcc']
 
@@ -169,13 +171,10 @@ class InstrumentSimulator():
                         self.structlabels.append(f'{shape}, {row[0]}')
                         transmissionprofiles = np.float_(row[2:])
                     else:
-                        self.structlabels.append(f'{shape}, {row[0]}')
                         if np.sum((np.float_(row[2:])) < 1.1) == len(wavelength) and np.sum((np.float_(row[2:])) > -0.0) == len(wavelength):
+                            self.structlabels.append(f'{shape}, {row[0]}')
                             transmissionprofiles = np.vstack(
                                 (transmissionprofiles, np.float_(row[2:])))
-                        else:
-                            transmissionprofiles = np.vstack(
-                                (transmissionprofiles, np.zeros((1, len(wavelength)))))
 
             if self.filterlibrary.size == 0:
                 self.filterlibrary = transmissionprofiles
@@ -187,14 +186,14 @@ class InstrumentSimulator():
         mask = self.wavelength_min <= wavelength * 1e9
         mask = np.logical_and(mask, wavelength * 1e9 < self.wavelength_max)
         self.filterlibrary = np.delete(self.filterlibrary, ~mask, axis=1)
-        
+
         # remove filters with 'ringing' simulation artefact
-        lib_fft = np.abs(np.fft.rfft(self.filterlibrary, axis = 1))
-        mask =lib_fft[:,21] > 3
-        self.filterlibrary = np.delete(self.filterlibrary, mask, axis = 0)
-        self.structlabels = np.delete(self.structlabels, mask, axis = 0)
+        lib_fft = np.abs(np.fft.rfft(self.filterlibrary, axis=1))
+        mask = lib_fft[:, 21] > 3
+        self.filterlibrary = np.delete(self.filterlibrary, mask, axis=0)
+        self.structlabels = np.delete(self.structlabels, mask, axis=0)
+
         self.filterlibrarysize = self.filterlibrary.shape[0]
-        
 
     def loadRadianceModel(self):
         """
@@ -212,7 +211,7 @@ class InstrumentSimulator():
 
     def filterguess(self):
         """
-        Initial guess of a filter set, based on the second moment of the FT of 
+        Initial guess of a filter set, based on the second moment of the FT of
         the transmission profiles. 160 filters are selected and repeated 4 times.
 
         Returns
@@ -222,13 +221,90 @@ class InstrumentSimulator():
 
         """
         nfilters = 160
-        Tfft = np.fft.rfft(self.filterlibrary, axis = 1)
-        wavelength_fft = np.fft.rfftfreq(self.wavelength_n,1)
-        Tfft_width = np.sum(np.abs(Tfft)**2 * (wavelength_fft[None,:]/1e9)**2, axis = 1)
-        selection =  np.argpartition(Tfft_width, -nfilters)[-nfilters:]
+        Tfft = np.fft.rfft(self.filterlibrary, axis=1)
+        wavelength_fft = np.fft.rfftfreq(self.wavelength_n, 1)
+        Tfft_width = np.sum(np.abs(Tfft)**2 * (wavelength_fft[None, :]/1e9)**2, axis=1)
+        selection = np.argpartition(Tfft_width, -nfilters)[-nfilters:]
         selection = np.repeat(selection, 4)
- 
+
         return selection
+
+    def getDistance(self, filter_index1, filter_index2, method):
+        """
+        Computes a distance/simularity of two filters using 3 methods:
+            1. maximum normalized cross correlation
+            2. ratio of transmission of the methane absorption lines
+            3. 2nd moment of fourier transforms
+
+        Parameters
+        ----------
+        filter_index1 : int
+            Index of filter 1.
+        filter_index2 : int
+            Index of filter 2.
+        method : int
+            Method index. Should be 1, 2, or 3.
+
+        Returns
+        -------
+        distance : float
+            distance metric between the two filters. Always positive.
+
+        """
+        assert -1 < filter_index1 < self.filterlibrarysize, 'Filter index 1 should be positive and not bigger than the filter library size'
+        assert -1 < filter_index2 < self.filterlibrarysize, 'Filter index 2 should be positive and not bigger than the filter library size'
+        assert method in [1, 2, 3], 'Method should be in [1, 2, 3]'
+
+        if method == 1:
+            # Get filters
+            filter1 = instrument.filterlibrary[filter_index1, :]
+            filter1 = filter1 / np.sum(filter1)
+            filter2 = instrument.filterlibrary[filter_index2, :]
+            filter2 = filter2 / np.sum(filter2)
+
+            # Compute cross correlation
+            crosscor = np.convolve(filter1, filter2, mode='same')
+
+            # normalize
+            # norm = np.convolve(np.ones(len(filter1)), np.ones(len(filter2)), mode='same') / len(filter1)
+            # crosscor = crosscor / norm
+
+            # Compute distance
+            distance = np.max(1/crosscor)
+
+        elif method == 2:
+            # Get mean absorption of methane over the athmosphere
+            absorption = np.mean(self.radiancemodel.sigma[4, :, :], axis=1)
+            absorption = absorption / np.max(absorption)
+
+            # get filters
+            filter1 = self.filterlibrary[filter_index1, :]
+            filter2 = self.filterlibrary[filter_index2, :]
+
+            # transmission of methane absorption lines
+            filter1_absoption_ratio = np.sum(filter1 * absorption) / np.sum(filter1)
+            filter2_absoption_ratio = np.sum(filter2 * absorption) / np.sum(filter2)
+
+            # Compute distance
+            distance = np.abs(filter1_absoption_ratio - filter2_absoption_ratio)
+
+        elif method == 3:
+            # get fft of filters
+            filter1_fft = np.abs(np.fft.rfft(self.filterlibrary[filter_index1, :]))**2
+            filter2_fft = np.abs(np.fft.rfft(self.filterlibrary[filter_index2, :]))**2
+
+            # 2nd Moment
+            wavelength_fft = np.fft.rfftfreq(self.wavelength_n, 1)
+            filter1_fft_2ndmom = np.sum(filter1_fft * wavelength_fft[None, :]**2)
+            filter2_fft_2ndmom = np.sum(filter2_fft * wavelength_fft[None, :]**2)
+
+            # Compute distance
+            distance = np.abs(filter1_fft_2ndmom - filter2_fft_2ndmom)
+
+        else:
+            distance = None
+
+        return distance
 
     def getTransmissionMatrix(self, selection):
         """
@@ -251,7 +327,7 @@ class InstrumentSimulator():
 
         return transmissionmatrix
 
-    def simulateMeasurement(self, selection, nCH4=1500, albedo=0.15, sza = 10, noise=True, n=100, verbose=False):
+    def simulateMeasurement(self, selection, nCH4=1500, albedo=0.15, sza=10, noise=True, n=100, verbose=False):
         """
         Simulates a series of measurements for the given condition.
 
@@ -281,20 +357,20 @@ class InstrumentSimulator():
             The relative bias in the estimated methane concentration.
 
         """
-        
+
         self.instrumentsettings.sza = sza
-        
+
         self.transmissionmatrix = self.getTransmissionMatrix(selection)
-        radiance, spectral_range = self.radiancemodel.getRadiance(nCH4, albedo, 
+        radiance, spectral_range = self.radiancemodel.getRadiance(nCH4, albedo,
                                                                   self.instrumentsettings.sza,
                                                                   self.instrumentsettings.vza)
         self.radiance = radiance
         self.spectral_range = spectral_range
-        
-        self.signal = self._getSignal(nCH4, albedo)
 
-        self.noise = np.sqrt(self.signal + self.instrumentsettings.detector.readnoise**2 +
-                             self.instrumentsettings.detector.darkcurrent * self.integrationtime)
+        self.signal = self._getSignal(nCH4, albedo) * self.instrumentsettings.spatialbinning
+
+        self.noise = np.sqrt(self.instrumentsettings.spatialbinning*(self.signal + self.instrumentsettings.detector.readnoise**2 +
+                             self.instrumentsettings.detector.darkcurrent * self.integrationtime))
         self.meanSNR = np.mean(self.signal / self.noise)
 
         if noise:
@@ -389,7 +465,7 @@ class InstrumentSimulator():
             fitted methane concentration in ppb.
 
         """
-        p0 = [1000, 0.2]
+        p0 = [2000, 0.2]
         fit = optimize.least_squares(
             self._getFiterror, p0, args=([], signal_noisy))
 
@@ -403,14 +479,14 @@ if __name__ == '__main__':
     instrument = InstrumentSimulator(instrumentsettings)
 
     print(f'Filter library size: {instrument.filterlibrarysize}')
-    
-    #%%
+
+    # %%
     # Example of how to select filters
     # selection = np.random.randint(0,instrument.filterlibrarysize, size = 640)
     selection = instrument.filterguess()
 
-    # Methane concentration should be [0,2000], typical: 1500
-    nCH4 = 1500
+    # Methane concentration should be [1500,3000], typical: 1800
+    nCH4 = 1800
 
     # low albedo is 0.15, high albedo is 0.7
     albedo = 0.15
@@ -420,16 +496,44 @@ if __name__ == '__main__':
 
     # number of noisy realizations
     n = 1000
-    
+
     # retrieve methane
     relative_fitprecision, relative_fitbias,  = instrument.simulateMeasurement(
-        selection, nCH4=nCH4, albedo=albedo, sza = sza, n=n, verbose=True)
+        selection, nCH4=nCH4, albedo=albedo, sza=sza, n=n, verbose=True)
     print(
         f'bias = {100*relative_fitbias:.1f}%, precision = {100*relative_fitprecision:.2f}%')
 
     selectedfilters = instrument.getTransmissionMatrix(selection)
     fig = plt.figure(dpi=300)
-    plt.plot(instrument.spectral_range,selectedfilters.T[:,::4])
+    plt.plot(instrument.spectral_range, selectedfilters.T[:, ::4])
     plt.xlabel('wavelength (nm)')
     plt.ylabel('transmission')
     plt.title('Transmission profiles')
+
+    # %% creates distance matrix
+    N = 1000
+    distance = np.zeros((3, N, N))
+
+    for i in range(N):
+        ind1 = i
+        for j in np.arange(i+1, N):
+            ind2 = j
+            for method in [1, 2, 3]:
+                distance[method-1, i, j] = instrument.getDistance(ind1, ind2, method)
+
+    # %%
+    filter_index = 0
+    title = 'Inv peak cross correlation'
+    plt.figure(dpi=300)
+    plt.hist(distance[filter_index].flatten(), bins=100, range=[0, 3000])
+    plt.title(title)
+    plt.xlabel('metric')
+    plt.ylabel('number of relations between filters')
+
+    plt.figure(dpi=300)
+    plt.imshow(np.log(distance[filter_index]))
+    plt.colorbar()
+    plt.title(title + '(log)')
+
+    # %%
+    plt.plot(instrument.spectral_range, instrument.filterlibrary[163, :])
