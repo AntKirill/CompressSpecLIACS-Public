@@ -330,7 +330,7 @@ class InstrumentSimulator():
             # crosscor = crosscor / norm
 
             # Compute distance
-            distance = 1 - 1 / np.max(crosscor)
+            distance = 1 / np.max(crosscor) - 1
 
         elif method == 2:
             # Get mean absorption of methane over the athmosphere
@@ -580,7 +580,7 @@ if __name__ == '__main__':
         for j in np.arange(i+1, N):
             ind2 = j
             for method in [1, 2, 3]:
-                distance[method-1, i, j] = instrument.getDistance(ind1, ind2, method)
+                distance[method-1, i, j] = instrument.getDistanceFilter(ind1, ind2, method)
 
     # %%
     filter_index = 0
