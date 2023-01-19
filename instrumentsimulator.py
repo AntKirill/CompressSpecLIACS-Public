@@ -229,7 +229,67 @@ class InstrumentSimulator():
 
         return selection
 
-    def getDistance(self, filter_index1, filter_index2, method):
+    def getDistanceFilterSet(self, filterset1_idx, filterset2_idx, method):
+        """
+        Computes a distance/simularity of two filter sets using 2 methods:
+            2. The variance in the ratio of transmission of the methane absorption lines of the filter set
+            3. The sum of the 2nd moment of fourier transforms of the filter set
+
+        Parameters
+        ----------
+        filterset1_idx : list(int)
+            List of indexes for filterset 1.
+        filterset1_idx : list(int)
+            List of indexes for filterset 2.
+        method : int
+            Method index. Should be 1 or 2.
+
+        Returns
+        -------
+        distance : float
+            distance metric between the two filter sets. Always positive.
+
+        """
+        assert method in [2, 3], 'Method should be in [2, 3]'
+        assert len(filterset1_idx) == self.instrumentsettings.detector.npxl_alt,\
+            f'Selection filterset 1 incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
+        assert len(filterset2_idx) == self.instrumentsettings.detector.npxl_alt,\
+            f'Selection filterset 2 incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
+
+        if method == 1:
+            transmissionmatrix_1 = self.getTransmissionMatrix(filterset1_idx)
+            transmissionmatrix_2 = self.getTransmissionMatrix(filterset2_idx)
+
+            # Get mean absorption of methane over the athmosphere
+            absorption = np.mean(self.radiancemodel.sigma[4, :, :], axis=1)
+            absorption = absorption / np.max(absorption)
+
+            signal_ratio_1 = transmissionmatrix_1 @ absorption / np.sum(transmissionmatrix_1, axis=1)
+            signal_ratio_2 = transmissionmatrix_2 @ absorption / np.sum(transmissionmatrix_2, axis=1)
+
+            signal_var_1 = np.var(signal_ratio_1)
+            signal_var_2 = np.var(signal_ratio_2)
+
+            distance = np.abs(signal_var_1 - signal_var_2)
+
+        elif method == 2:
+            transmissionmatrix_1 = self.getTransmissionMatrix(filterset1_idx)
+            transmissionmatrix_2 = self.getTransmissionMatrix(filterset2_idx)
+            wavelength_fft = np.fft.rfftfreq(self.wavelength_n, 1)
+
+            transmissionmatrix_fft_1 = np.fft.rfft(transmissionmatrix_1, axis=1)
+            transmissionmatrix_fft_2 = np.fft.rfft(transmissionmatrix_2, axis=1)
+
+            fft_width_1 = np.sum(np.abs(transmissionmatrix_fft_1)**2 * (wavelength_fft[None, :])**2)
+            fft_width_2 = np.sum(np.abs(transmissionmatrix_fft_2)**2 * (wavelength_fft[None, :])**2)
+
+            distance = np.abs(fft_width_1 - fft_width_2)
+        else:
+            distance = None
+
+        return distance
+
+    def getDistanceFilter(self, filter_index1, filter_index2, method):
         """
         Computes a distance/simularity of two filters using 3 methods:
             1. maximum normalized cross correlation
@@ -270,7 +330,7 @@ class InstrumentSimulator():
             # crosscor = crosscor / norm
 
             # Compute distance
-            distance = np.max(1/crosscor)
+            distance = 1 - 1 / np.max(crosscor)
 
         elif method == 2:
             # Get mean absorption of methane over the athmosphere
@@ -472,6 +532,7 @@ class InstrumentSimulator():
         return fit.x[0]
 
 
+# %%
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
