@@ -203,7 +203,7 @@ def test_mies():
     f = utils.ObjFunctionAverageSquare(inst, constants)
     f = utils.add_logger(f, M, '_tmp_test', 'alg_name', 'alg_info')
     f = utils.add_segm_dim_reduction(f, M, 16)
-    alg = algorithms.MIESWrapper(5, 16, L, 0)
+    alg = algorithms.MIESWrapper(5, 16, L, 0, 15, 30)
     alg(f)
 
 

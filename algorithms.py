@@ -103,10 +103,12 @@ class NoiseBOWrapper:
 
 
 class MIESWrapper:
-    def __init__(self, budget, M, L, seed):
+    def __init__(self, budget, M, L, seed, mu_=4, lambda_=10):
         self.M = M
         self.L = L
         self.budget = budget
+        self.mu_ = mu_
+        self.lambda_ = lambda_
         np.random.seed(seed)
 
     def __call__(self, f):
@@ -114,7 +116,9 @@ class MIESWrapper:
         mies = mipego.optimizer.mies.MIES(
             search_space=I,
             obj_func=f,
-            max_eval=self.budget)
+            max_eval=self.budget,
+            mu_=self.mu_,
+            lambda_=self.lambda_)
         xopt, fopt, stop_dict = mies.optimize()
         return xopt, fopt
 
