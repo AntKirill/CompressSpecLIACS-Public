@@ -275,18 +275,18 @@ class GeneratorHarmonic(Generator1):
         self.k = dim
         self.a = np.zeros(self.k, dtype=int)
         self.seqs = []
-        self.__gen(0, 0)
+        self._gen(0, 0)
         self.dists = np.zeros(len(self.seqs))
 
-    def __gen(self, pos, el):
+    def _gen(self, pos, el):
         if pos == self.k:
             self.seqs.append(np.copy(self.a))
             return
         for i in range(el, self.n):
             self.a[pos] = i
-            self.__gen(pos + 1, i)
+            self._gen(pos + 1, i)
 
-    def __to_offspring(self, x, seq):
+    def _to_offspring(self, x, seq):
         offspring = np.zeros(len(x), dtype=int)
         for i in range(len(x)):
             _, offspring[i] = self.matrix_sorted_rows[x[i]][seq[i]]
@@ -294,7 +294,7 @@ class GeneratorHarmonic(Generator1):
 
     def generate_distant_offspring(self, x, d):
         for i in range(len(self.seqs)):
-            self.dists[i] = self.d1(x, self.__to_offspring(x, self.seqs[i]))
+            self.dists[i] = self.d1(x, self._to_offspring(x, self.seqs[i]))
         sorted_ids = np.argsort(self.dists)
         r = len(self.dists) - 1
         c = 0
@@ -303,7 +303,18 @@ class GeneratorHarmonic(Generator1):
         c = c**-1
         p = [c / i for i in range(1, r + 1)]
         pos = np.random.choice([i for i in range(1, r + 1)], p=p)
-        offspring = self.__to_offspring(x, self.seqs[sorted_ids[pos]])
+        offspring = self._to_offspring(x, self.seqs[sorted_ids[pos]])
+        print(pos, self.d1(x, offspring))
+        return offspring
+
+
+class GeneratorUniform(GeneratorHarmonic):
+    def __init__(self, filter_dist_matrix, d1, factor, dim):
+        super().__init__(filter_dist_matrix, d1, factor, dim)
+
+    def generate_distant_offspring(self, x, d):
+        pos = np.random.randint(1, len(self.seqs))
+        offspring = self._to_offspring(x, self.seqs[pos])
         print(pos, self.d1(x, offspring))
         return offspring
 
@@ -356,3 +367,5 @@ def create_offspring_generator(inst, d0_method, d1_method, generating_method, fa
         return Generator2(dist_matrix, d1)
     if generating_method == 'harmonic':
         return GeneratorHarmonic(dist_matrix, d1, factor, dim)
+    if generating_method == 'uniform':
+        return GeneratorUniform(dist_matrix, d1, factor, dim)
