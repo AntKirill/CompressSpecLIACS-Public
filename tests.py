@@ -129,6 +129,18 @@ def test_generator_2():
     do_test_generator(generator)
 
 
+def test_generator_harmonic():
+    inst = utils.create_instrument()
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', 0.0012, 16)
+    selection = utils.read_selection('designs/newDesign')
+    dim_red = utils.SegmentsDimReduction(640, 16)
+    reduced_selection = dim_red.to_reduced(selection)
+    timer = timeit.Timer(functools.partial(generator.generate_distant_offspring, reduced_selection, 0.0012))
+    n = 10
+    result = timer.timeit(n)
+    print(f"Execution time is {result / n} seconds")
+
+
 def test_algorithms_MyES():
     inst = utils.create_instrument()
     M = 640

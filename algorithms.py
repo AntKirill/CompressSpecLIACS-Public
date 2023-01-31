@@ -268,6 +268,46 @@ class Generator2(Generator1):
         return y
 
 
+class GeneratorHarmonic(Generator1):
+    def __init__(self, filter_dist_matrix, d1, factor, dim):
+        super().__init__(filter_dist_matrix, d1)
+        self.n = int(len(self.matrix_sorted_rows[0]) * factor)
+        self.k = dim
+        self.a = np.zeros(self.k, dtype=int)
+        self.seqs = []
+        self.__gen(0, 0)
+        self.dists = np.zeros(len(self.seqs))
+
+    def __gen(self, pos, el):
+        if pos == self.k:
+            self.seqs.append(np.copy(self.a))
+            return
+        for i in range(el, self.n):
+            self.a[pos] = i
+            self.__gen(pos + 1, i)
+
+    def __to_offspring(self, x, seq):
+        offspring = np.zeros(len(x), dtype=int)
+        for i in range(len(x)):
+            _, offspring[i] = self.matrix_sorted_rows[x[i]][seq[i]]
+        return offspring
+
+    def generate_distant_offspring(self, x, d):
+        for i in range(len(self.seqs)):
+            self.dists[i] = self.d1(x, self.__to_offspring(x, self.seqs[i]))
+        sorted_ids = np.argsort(self.dists)
+        r = len(self.dists) - 1
+        c = 0
+        for i in range(1, r + 1):
+            c += i ** -1
+        c = c**-1
+        p = [c / i for i in range(1, r + 1)]
+        pos = np.random.choice([i for i in range(1, r + 1)], p=p)
+        offspring = self.__to_offspring(x, self.seqs[sorted_ids[pos]])
+        print(pos, self.d1(x, offspring))
+        return offspring
+
+
 class Generator:
     def __init__(self, filter_dist_matrix, d1):
         self.matrix = filter_dist_matrix
@@ -300,10 +340,13 @@ class Generator:
         return self.__construct_individual(res[0])
 
 
-def create_offspring_generator(inst, d0_method, d1_method, generating_method):
+def create_offspring_generator(inst, d0_method, d1_method, generating_method, factor=None, dim=None):
     dist_matrix = FilterDistanceFactory(inst) \
         .create_precomputed_filter_distance_matrix(d0_method, f'precomputedFiltersDists/method{d0_method}.txt')
-    d0 = lambda s1, s2: dist_matrix[s1, s2]
+
+    def d0(s1, s2):
+        return dist_matrix[s1, s2]
+
     d1 = SequenceDistanceFactory(d0).create_sequence_distance(d1_method)
     if generating_method == 'cma':
         return Generator(dist_matrix, d1)
@@ -311,3 +354,5 @@ def create_offspring_generator(inst, d0_method, d1_method, generating_method):
         return Generator1(dist_matrix, d1)
     if generating_method == 2:
         return Generator2(dist_matrix, d1)
+    if generating_method == 'harmonic':
+        return GeneratorHarmonic(dist_matrix, d1, factor, dim)
