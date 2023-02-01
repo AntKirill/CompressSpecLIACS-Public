@@ -1,3 +1,4 @@
+import math
 from abc import ABC, abstractmethod
 
 import cma
@@ -83,7 +84,7 @@ class NoiseBOWrapper:
         np.random.seed(seed)
 
     def __call__(self, f):
-        I = mipego.OrdinalSpace([0, self.L-1]) * self.M
+        I = mipego.OrdinalSpace([0, self.L - 1]) * self.M
         model = mipego.RandomForest(levels=I.levels)
         opt = mipego.NoisyBO(
             search_space=I,
@@ -112,7 +113,7 @@ class MIESWrapper:
         np.random.seed(seed)
 
     def __call__(self, f):
-        I = mipego.OrdinalSpace([0, self.L-1]) * self.M
+        I = mipego.OrdinalSpace([0, self.L - 1]) * self.M
         mies = mipego.optimizer.mies.MIES(
             search_space=I,
             obj_func=f,
@@ -223,8 +224,23 @@ class MyES1(MyES):
         return offspring
 
 
-class Generator1:
+class AbstractGenerator(ABC):
+    def __init__(self, d1) -> None:
+        self.d1 = d1
+        self.dist_from_x = None
+
+    @abstractmethod
+    def generate_distant_offspring(self, x, d):
+        pass
+
+    @property
+    def distance_from_parent(self):
+        return self.dist_from_x
+
+
+class Generator1(AbstractGenerator):
     def __init__(self, filter_dist_matrix, d1):
+        super().__init__(d1)
         self.matrix = filter_dist_matrix
         self.d1 = d1
         self.matrix_sorted_rows = []
@@ -244,7 +260,7 @@ class Generator1:
             v = self.d1(x, y)
             if v > max_v:
                 max_v, best_y = v, y
-        print(max_v)
+        self.dist_from_x = max_v
         return best_y
 
 
@@ -264,63 +280,109 @@ class Generator2(Generator1):
             i = np.random.randint(0, len(x))
             ind = int(len(self.matrix_sorted_rows[0]) * np.random.uniform(0, d))
             _, y[i] = self.matrix_sorted_rows[x[i]][ind]
-        print(self.d1(y, x))
+        self.dist_from_x = self.d1(y, x)
         return y
 
 
 class GeneratorHarmonic(Generator1):
-    def __init__(self, filter_dist_matrix, d1, factor, dim):
+    def __init__(self, filter_dist_matrix, d1, seqs, offset):
         super().__init__(filter_dist_matrix, d1)
-        self.n = int(len(self.matrix_sorted_rows[0]) * factor)
-        self.k = dim
-        self.a = np.zeros(self.k, dtype=int)
-        self.seqs = []
-        self._gen(0, 0)
+        self.seqs = seqs
         self.dists = np.zeros(len(self.seqs))
-
-    def _gen(self, pos, el):
-        if pos == self.k:
-            self.seqs.append(np.copy(self.a))
-            return
-        for i in range(el, self.n):
-            self.a[pos] = i
-            self._gen(pos + 1, i)
+        self.offset = offset
+        self.sorted_ids = None
+        self.pos = None
 
     def _to_offspring(self, x, seq):
         offspring = np.zeros(len(x), dtype=int)
         for i in range(len(x)):
-            _, offspring[i] = self.matrix_sorted_rows[x[i]][seq[i]]
+            _, offspring[i] = self.matrix_sorted_rows[x[i]][self.offset + seq[i]]
         return offspring
 
     def generate_distant_offspring(self, x, d):
         for i in range(len(self.seqs)):
             self.dists[i] = self.d1(x, self._to_offspring(x, self.seqs[i]))
-        sorted_ids = np.argsort(self.dists)
+        self.sorted_ids = np.argsort(self.dists)
         r = len(self.dists) - 1
         c = 0
         for i in range(1, r + 1):
             c += i ** -1
-        c = c**-1
+        c = c ** -1
         p = [c / i for i in range(1, r + 1)]
-        pos = np.random.choice([i for i in range(1, r + 1)], p=p)
-        offspring = self._to_offspring(x, self.seqs[sorted_ids[pos]])
-        print(pos, self.d1(x, offspring))
+        self.pos = np.random.choice([i for i in range(1, r + 1)], p=p)
+        offspring = self._to_offspring(x, self.seqs[self.sorted_ids[self.pos]])
+        self.dist_from_x = self.dists[self.sorted_ids[self.pos]]
         return offspring
 
 
+class CombinationsWithRepetitions:
+    def __init__(self):
+        self.skipped = 0
+        self.is_generated = False
+        self.seqs = None
+        self.a = None
+
+    def __gen(self, pos, el, n, k):
+        if pos == k:
+            self.seqs.append(np.copy(self.a))
+            return
+        for i in range(el, n):
+            self.a[pos] = i
+            self.__gen(pos + 1, i, n, k)
+
+    def generate_lexicographically(self, num_types, length):
+        self.seqs = []
+        self.a = np.zeros(length, dtype=int)
+        self.__gen(0, 0, num_types, length)
+        return np.copy(self.seqs)
+
+    def __gen_with_gaps(self, pos, el, d, n, k):
+        if pos == k:
+            if self.is_generated:
+                self.skipped += 1
+                return
+            self.is_generated = True
+            self.seqs.append(np.copy(self.a))
+            return
+        for i in range(el, n):
+            if self.is_generated:
+                left_on_suffix = CombinationsWithRepetitions.number(n - i, k - pos - 1)
+                if d - 1 - self.skipped >= left_on_suffix:
+                    self.skipped += left_on_suffix
+                    continue
+            if d - 1 == self.skipped:
+                self.is_generated = False
+                self.skipped = 0
+            self.a[pos] = i
+            self.__gen_with_gaps(pos + 1, i, d, n, k)
+
+    def generate_lexicographically_with_gaps(self, num_types, length, gap):
+        self.seqs = []
+        self.a = np.zeros(length, dtype=int)
+        self.skipped = 0
+        self.is_generated = False
+        self.__gen_with_gaps(0, 0, gap, num_types, length)
+        return np.copy(self.seqs)
+
+    @staticmethod
+    def number(num_types, length):
+        return math.comb(num_types + length - 1, length)
+
+
 class GeneratorUniform(GeneratorHarmonic):
-    def __init__(self, filter_dist_matrix, d1, factor, dim):
-        super().__init__(filter_dist_matrix, d1, factor, dim)
+    def __init__(self, filter_dist_matrix, d1, seqs, offset):
+        super().__init__(filter_dist_matrix, d1, seqs, offset)
 
     def generate_distant_offspring(self, x, d):
         pos = np.random.randint(1, len(self.seqs))
         offspring = self._to_offspring(x, self.seqs[pos])
-        print(pos, self.d1(x, offspring))
+        self.dist_from_x = self.d1(x, offspring)
         return offspring
 
 
-class Generator:
+class Generator(AbstractGenerator):
     def __init__(self, filter_dist_matrix, d1):
+        super().__init__(d1)
         self.matrix = filter_dist_matrix
         self.d1 = d1
 
@@ -351,12 +413,12 @@ class Generator:
         return self.__construct_individual(res[0])
 
 
-def create_offspring_generator(inst, d0_method, d1_method, generating_method, factor=None, dim=None):
+def create_offspring_generator(inst, d0_method, d1_method, generating_method, seqs=None, offset=None):
     dist_matrix = FilterDistanceFactory(inst) \
         .create_precomputed_filter_distance_matrix(d0_method, f'precomputedFiltersDists/method{d0_method}.txt')
 
     def d0(s1, s2):
-        return dist_matrix[s1, s2]
+        return dist_matrix[int(s1), int(s2)]
 
     d1 = SequenceDistanceFactory(d0).create_sequence_distance(d1_method)
     if generating_method == 'cma':
@@ -366,6 +428,6 @@ def create_offspring_generator(inst, d0_method, d1_method, generating_method, fa
     if generating_method == 2:
         return Generator2(dist_matrix, d1)
     if generating_method == 'harmonic':
-        return GeneratorHarmonic(dist_matrix, d1, factor, dim)
+        return GeneratorHarmonic(dist_matrix, d1, seqs, offset)
     if generating_method == 'uniform':
-        return GeneratorUniform(dist_matrix, d1, factor, dim)
+        return GeneratorUniform(dist_matrix, d1, seqs, offset)
