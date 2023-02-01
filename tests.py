@@ -1,5 +1,6 @@
 import functools
 import json
+import math
 import timeit
 
 import numpy as np
@@ -65,17 +66,49 @@ def test_transmission_profiles():
     vis.save_transmission_profiles(selection, 'tp.pdf', (20, 32))
 
 
+def test_landscape_visualization():
+    instrument = utils.create_instrument()
+    select = utils.read_selection('designs/best-design-by-27-01')
+    R = 16
+    M = 640
+    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'harmonic')
+    dim_reduction = utils.SegmentsDimReduction(M, R)
+    select_reduced = dim_reduction.to_reduced(select)
+    visualization = utils.LandscapeVisualization()
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    f = utils.ObjFunctionAverageSquare(instrument, constants)
+    f = utils.add_segm_dim_reduction(f, M, 16)
+    generator.generate_distant_offspring(select_reduced, 0.0012)
+    np.random.seed(0)
+    choice = np.random.choice([i for i in range(len(generator.seqs))], 200, replace=False)
+    # chosen = [np.array(generator._to_offspring(select_reduced, generator.seqs[choice[i]]), dtype=int) for i in
+    #                   range(len(choice))]
+    chosen = []
+    pos = set()
+    for i in range(200):
+        offspring = generator.generate_distant_offspring(select_reduced, 0.0012)
+        if generator.pos not in pos:
+            pos.add(generator.pos)
+            chosen.append(offspring)
+
+    print(len(chosen))
+    chosen.append(select_reduced)
+    X = np.array(chosen)
+    visualization.visualize(X, f, generator.d1)
+
+
 def test_transmission_profiles_2():
     inst = utils.create_instrument()
     d0 = utils.FilterDistanceFactory(inst).create_precomputed_filters_distance(2, 'precomputedFiltersDists/method2.txt')
     d1 = utils.SequenceDistanceFactory(d0).create_sequence_distance('kirill')
     dim_reduction = utils.SegmentsDimReduction(640, 16)
-    selection1 = utils.read_selection('designs/newDesign')
+    selection1 = utils.read_selection('designs/best-design-by-27-01')
     selection1_reduced = dim_reduction.to_reduced(selection1)
     selection2_reduced = utils.read_selection('designs/dSegmGood')
     selection2 = dim_reduction.to_original(selection2_reduced)
     dist = d1(selection1, selection2)
     print(dist)
+    selection1_reduced.sort()
     permutation = d1.get_permutation(selection1_reduced, selection2_reduced)
     selection2_reduced = [selection2_reduced[permutation[i]] for i in range(len(permutation))]
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
@@ -95,6 +128,19 @@ def test_logs():
     for i in range(N):
         f_obj = wrapped_f(selection)
         print(f_obj)
+
+
+def test_logs_with_generator():
+    instrument = utils.create_instrument()
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically(5, 16)
+    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'harmonic', seqs, 0)
+    f = utils.ObjFunctionAverageSquare(instrument, constants, 1000)
+    f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test', generator)
+    f = utils.add_segm_dim_reduction(f, 640, 16)
+    alg = algorithms.MyES(None, 640, 6, 2, 2, 0., generator)
+    pop = [np.random.randint(0, instrument.filterlibrarysize, 16) for _ in range(2)]
+    alg(f, pop)
 
 
 def test_dim_reduction():
@@ -127,11 +173,16 @@ def test_generator_2():
     inst = utils.create_instrument()
     generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 2)
     do_test_generator(generator)
+    selection = utils.read_selection('designs/newDesign')
+    for _ in range(10):
+        generator.generate_distant_offspring(selection, 0.1)
+        print(generator.distance_from_parent)
 
 
 def test_generator_harmonic():
     inst = utils.create_instrument()
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', 0.0012, 16)
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically(5, 16)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs, 0)
     selection = utils.read_selection('designs/newDesign')
     dim_red = utils.SegmentsDimReduction(640, 16)
     reduced_selection = dim_red.to_reduced(selection)
@@ -139,10 +190,35 @@ def test_generator_harmonic():
     n = 10
     result = timer.timeit(n)
     print(f"Execution time is {result / n} seconds")
+
+
+def test_generator_harmonic_1():
+    inst = utils.create_instrument()
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16, 10**42)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs, 0)
+    selection = utils.read_selection('designs/newDesign')
+    dim_red = utils.SegmentsDimReduction(640, 16)
+    reduced_selection = dim_red.to_reduced(selection)
+    timer = timeit.Timer(functools.partial(generator.generate_distant_offspring, reduced_selection, 0))
+    n = 10
+    result = timer.timeit(n)
+    print(*generator.dists[generator.sorted_ids])
+    print(f"Execution time is {result / n} seconds")
+
+
+def test_neighborhood_size_generator_harmonic_1():
+    inst = utils.create_instrument()
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16, 10**42)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic1', seqs, 0)
+    for i in range(1000):
+        offspring = np.random.randint(0, inst.filterlibrarysize, 16)
+        generator.generate_distant_offspring(offspring, 0)
+        print(generator.dists[generator.sorted_ids[len(seqs)-1]])
+
 
 def test_generator_uniform():
     inst = utils.create_instrument()
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'uniform', 0.0012, 16)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'uniform')
     selection = utils.read_selection('designs/newDesign')
     dim_red = utils.SegmentsDimReduction(640, 16)
     reduced_selection = dim_red.to_reduced(selection)
@@ -150,7 +226,6 @@ def test_generator_uniform():
     n = 10
     result = timer.timeit(n)
     print(f"Execution time is {result / n} seconds")
-
 
 
 def test_algorithms_MyES():
@@ -264,3 +339,29 @@ def test_bo_configs():
     alg = bootstrap.Experiment().create_experiment(config)
     alg()
 
+
+def do_test_combinations_with_repetitions(n, k):
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically(n, k)
+    assert len(seqs) == math.comb(n + k - 1, k)
+    assert len(seqs) == algorithms.CombinationsWithRepetitions.number(n, k)
+
+
+def do_test_combinations_with_repetitions_with_gaps(n, k, gap):
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(n, k, gap)
+    number = algorithms.CombinationsWithRepetitions.number(n, k)
+    correct_len = number // gap
+    correct_len += 1 if number % gap != 0 else 0
+    assert len(seqs) == correct_len
+
+
+def test_combinations_with_repetitions():
+    do_test_combinations_with_repetitions(5, 1)
+    do_test_combinations_with_repetitions(5, 3)
+    do_test_combinations_with_repetitions(5, 4)
+    do_test_combinations_with_repetitions(10, 5)
+    n, k = 5, 2
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(n, k, 3)
+    correct_seqs = np.array([[0, 0], [0, 3], [1, 2], [2, 2], [3, 3]])
+    assert (seqs == correct_seqs).all()
+    do_test_combinations_with_repetitions_with_gaps(5, 3, 4)
+    do_test_combinations_with_repetitions_with_gaps(20, 32, 4*10**10)
