@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 
 import scipy
+import sklearn.manifold
+import matplotlib as mpl
 from matplotlib import pyplot as plt
+from sklearn import preprocessing
 
 import instrumentsimulator
 import numpy as np
@@ -104,6 +107,24 @@ class SequenceFiltersVisualization:
         fig.text(0.5, 0.07, 'wavelength (nm)', ha='center')
         fig.text(0.09, 0.5, 'transmission', va='center', rotation='vertical')
         fig.savefig(file_name)
+
+
+class LandscapeVisualization:
+    def __init__(self) -> None:
+        pass
+
+    def visualize(self, X, f, d1):
+        tsne = sklearn.manifold.TSNE(perplexity=50, metric=d1)
+        y = tsne.fit_transform(X)
+        fig = plt.figure()
+        jet_cmap = mpl.cm.get_cmap(name='jet')
+        # values = np.random.uniform(0.0004, 0.002, len(X))
+        values = np.array([f(x) for x in X])
+        mi, ma = values.min(), values.max()
+        values = np.array([(v - mi) / (ma - mi) for v in values])
+        plt.scatter(y[:len(y) - 1, 0], y[:len(y) - 1, 1], c=[jet_cmap(i) for i in values[:len(y) - 1]])
+        plt.scatter(y[len(y) - 1, 0], y[len(y) - 1, 1], c=[jet_cmap(values[len(y) - 1])], marker='x')
+        fig.savefig('manifold.pdf')
 
 
 class SegmentedSequenceFiltersVisualization(SequenceFiltersVisualization):
@@ -232,7 +253,7 @@ class SequenceDistanceFactory:
             return seq_dist
 
 
-def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str):
+def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, generator=None):
     wrapped_f = mylogger.MyObjectiveFunctionWrapper(f, dim=ndim, fname='SRON_nCH4_noisy_recovery')
     logger = mylogger.MyLogger(root=root_name,
                                folder_name="everyeval",
@@ -246,6 +267,8 @@ def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str):
                                     isLogArg=True)
     logger.watch(f, ['sron_bias', 'sron_precision'])
     logger_best.watch(f, ['sron_bias', 'sron_precision'])
+    if generator is not None:
+        logger.watch(generator, ['distance_from_parent'])
     wrapped_f.attach_logger(logger)
     wrapped_f.attach_logger(logger_best)
     return wrapped_f
