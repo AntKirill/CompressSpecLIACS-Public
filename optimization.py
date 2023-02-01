@@ -8,18 +8,21 @@ import algorithms
 def run_es():
     inst = utils.create_instrument()
     M = 640  # number of filters in the sequeance of filters
-    R = 16 # reduced dimensionality
+    R = 16  # reduced dimensionality
     lib_size = inst.filterlibrarysize
 
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
 
+    seqs = algorithms.CombinationsWithRepetitions() \
+        .generate_lexicographically_with_gaps(inst.filterlibrarysize, 16, 10 ** 42)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs=seqs, offset=0)
+
     f = utils.ObjFunctionAverageSquare(inst, constants)
-    f = utils.add_logger(f, M, 'experiments-myes', 'myes', 'myes')
+    f = utils.add_logger(f, M, 'experiments-myes', 'myes', 'myes', generator)
     f = utils.add_segm_dim_reduction(f, M, R)
 
-    mu_, lambda_ = 5, 30
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', 0.0012, R)
-    alg = algorithms.MyES(None, M, 1000, mu_, lambda_, 0.0012, generator)
+    mu_, lambda_ = 15, 30
+    alg = algorithms.MyES(None, M, 10000, mu_, lambda_, 0., generator)
     pop = [np.random.randint(0, lib_size, R) for _ in range(mu_)]
 
     alg(f, pop)
