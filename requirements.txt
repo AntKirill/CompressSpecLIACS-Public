@@ -1,8 +1,8 @@
-cma==3.2.2
-matplotlib==3.6.2
-mipego==2.0.0
-numpy==1.23.4
-pandas==1.5.2
-pytest==7.2.1
-scipy==1.10.0
+cma
+matplotlib
+mipego
+numpy
+pandas
+pytest
+scipy
 tabulate
