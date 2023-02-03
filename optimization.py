@@ -9,6 +9,7 @@ def run_es():
     inst = utils.create_instrument()
     M = 640  # number of filters in the sequeance of filters
     R = 16  # reduced dimensionality
+    mu_, lambda_ = 30, 30
     lib_size = inst.filterlibrarysize
 
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
@@ -18,11 +19,11 @@ def run_es():
     generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs=seqs, offset=0)
 
     f = utils.ObjFunctionAverageSquare(inst, constants)
-    f = utils.add_logger(f, M, 'experiments-myes', 'myes', 'myes', generator)
+    f = utils.add_logger(f, M, 'experiments-myes-harmonic', 'myes', 
+f'({mu_}+{lambda_}) es with harmonic mutations. Combinations with repetitions are generated for all the filters ({lib_size} filters) and {R} segments with gap=10**42. Objective function is defined on {R} segments', generator)
     f = utils.add_segm_dim_reduction(f, M, R)
 
-    mu_, lambda_ = 15, 30
-    alg = algorithms.MyES(None, M, 10000, mu_, lambda_, 0., generator)
+    alg = algorithms.MyES(None, M, 20000, mu_, lambda_, 0., generator)
     pop = [np.random.randint(0, lib_size, R) for _ in range(mu_)]
 
     alg(f, pop)
