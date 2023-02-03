@@ -92,7 +92,7 @@ class MyLogger:
                         extra_info = getattr(self.algorithms[i], fu)
                     except Exception:
                         extra_info = 'None'
-                f.write(f' {extra_info}')
+                    f.write(f' {extra_info}')
             if self.isLogArg:
                 for element in arg:
                     f.write(f' {element}')
