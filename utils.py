@@ -96,17 +96,24 @@ class SequenceFiltersVisualization:
         sz = len(profiles)
         fig, axs = plt.subplots(n, m)
         plt.subplots_adjust(wspace=0, hspace=0)
+
+        def get_axs(i, j):
+            if n == 1 or m == 1:
+                return axs[i + j]
+            return axs[i, j]
+
         for i in range(n):
             for j in range(m):
                 if i * m + j < sz:
-                    axs[i, j].plot(spectral_range, profiles[i * m + j], linewidth=0.4)
-                axs[i, j].set_xticks([])
-                axs[i, j].set_yticks([])
-                [i.set_linewidth(0.1) for i in axs[i, j].spines.values()]
-                # axs[i, j].axis('off')
+                    get_axs(i, j).plot(spectral_range, profiles[i * m + j], linewidth=0.4)
+                get_axs(i, j).set_xticks([])
+                get_axs(i, j).set_yticks([])
+                [i.set_linewidth(0.1) for i in get_axs(i, j).spines.values()]
+                # get_axs(i, j).axis('off')
         fig.text(0.5, 0.07, 'wavelength (nm)', ha='center')
         fig.text(0.09, 0.5, 'transmission', va='center', rotation='vertical')
         fig.savefig(file_name)
+        plt.close()
 
 
 class LandscapeVisualization:
