@@ -5,6 +5,7 @@ import cma
 import numpy as np
 
 import mipego
+import scipy
 
 from utils import FilterDistanceFactory, SequenceDistanceFactory, SequenceDistanceKirill
 
@@ -223,6 +224,55 @@ class MyES(AbstractES):
         return all_population[:mu_]
 
 
+class MyDistribution(ABC):
+    @abstractmethod
+    def sample(self, min_value, max_value):
+        pass
+
+
+class Uniform(MyDistribution):
+    def sample(self, min_value, max_value):
+        return np.random.uniform(min_value, max_value)
+
+
+class Beta(MyDistribution):
+    def __init__(self) -> None:
+        super().__init__()
+        self.distribution = scipy.stats.beta(2, 7)
+
+    def sample(self, min_value, max_value):
+        sample = min_value + self.distribution.rvs(size=1) * (max_value - min_value)
+        return sample[0]
+
+
+class Normal(MyDistribution):
+    def sample(self, min_value, max_value):
+        mu = (min_value + max_value) / 2.
+        sigma = mu / 10
+        return np.random.normal(mu, sigma)
+
+
+class Exponential(MyDistribution):
+    def sample(self, min_value, max_value):
+        l = 10.
+        x = -np.log(1 - (1 - np.exp(-l)) * np.random.uniform(0, 1.)) / l
+        sample = min_value + x * (max_value - min_value)
+        return sample
+
+
+class MyESFixedDistDistribution(MyES):
+    def __init__(self, genotype_space, dim, budget, mu_, lambda_, initial_distance, generator, distribution):
+        super().__init__(genotype_space, dim, budget, mu_, lambda_, initial_distance, generator)
+        self.distribution = distribution
+        self.min_dist = 0.
+        self.max_dist = 0.1
+
+    def mutation(self, ind):
+        self.max_dist = np.random.uniform(0, 0.01)
+        self.d = self.distribution.sample(self.min_dist, self.max_dist)
+        return super().mutation(ind)
+
+
 class MyES1(MyES):
     def crossover(self, parent1, parent2):
         offspring = np.copy(parent1.genotype)
@@ -333,6 +383,7 @@ class GeneratorEA(AbstractGenerator):
         self.matrix_sorted_rows = self._get_matrix_sorted_rows(self.matrix)
         self.budget = budget
         self.target_dist_from_x = None
+        self.distribution = scipy.stats.beta(2, 8)
 
     def generate_distant_offspring(self, x, d):
         self.target_dist_from_x = d

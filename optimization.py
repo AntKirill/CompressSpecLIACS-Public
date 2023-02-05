@@ -9,21 +9,52 @@ def run_es():
     inst = utils.create_instrument()
     M = 640  # number of filters in the sequeance of filters
     R = 16  # reduced dimensionality
-    mu_, lambda_ = 30, 30
+    # mu_, lambda_ = 15, 30
+    mu_, lambda_ = 5, 5
     lib_size = inst.filterlibrarysize
 
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
 
-    seqs = algorithms.CombinationsWithRepetitions() \
-        .generate_lexicographically_with_gaps(inst.filterlibrarysize, 16, 10 ** 42)
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs=seqs, offset=0)
+    mutation_distance = 0.01
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
+    # generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 2)
 
     f = utils.ObjFunctionAverageSquare(inst, constants)
-    f = utils.add_logger(f, M, 'experiments-myes-harmonic', 'myes', 
-f'({mu_}+{lambda_}) es with harmonic mutations. Combinations with repetitions are generated for all the filters ({lib_size} filters) and {R} segments with gap=10**42. Objective function is defined on {R} segments', generator)
+    f = utils.add_logger(f, M, 'experiments-myes-generatorEA', 'myes',
+                         f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to {mutation_distance:.5f} from the parent. Objective function is defined on {R} segments',
+                         generator)
+    # f = utils.add_logger(f, M, 'experiments-myes-generator2', 'myes',
+    #                      f'({mu_}+{lambda_}) es with generator EA',
+    #                      generator)
     f = utils.add_segm_dim_reduction(f, M, R)
 
-    alg = algorithms.MyES(None, M, 20000, mu_, lambda_, 0., generator)
+    alg = algorithms.MyES(None, M, 20000, mu_, lambda_, mutation_distance, generator)
+    pop = [np.random.randint(0, lib_size, R) for _ in range(mu_)]
+
+    alg(f, pop)
+
+
+def run_es_distr():
+    inst = utils.create_instrument()
+    M = 640  # number of filters in the sequeance of filters
+    R = 16  # reduced dimensionality
+    # mu_, lambda_ = 15, 30
+    mu_, lambda_ = 5, 5
+    lib_size = inst.filterlibrarysize
+
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+
+    mutation_distance = 0.01
+    distr = algorithms.Exponential()
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
+
+    f = utils.ObjFunctionAverageSquare(inst, constants)
+    f = utils.add_logger(f, M, 'experiments-myes-generatorEA', 'myes',
+                         f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to the given distance from the parent. This distance is drawn from the {distr.__class__.__name__} distribution with max_dist choosen uniformly at random from 0, to 0.01. Objective function is defined on {R} segments',
+                         generator)
+    f = utils.add_segm_dim_reduction(f, M, R)
+
+    alg = algorithms.MyESFixedDistDistribution(None, M, 20000, mu_, lambda_, mutation_distance, generator, distr)
     pop = [np.random.randint(0, lib_size, R) for _ in range(mu_)]
 
     alg(f, pop)
@@ -76,7 +107,7 @@ def run_mies():
 
 
 def main():
-    run_es()
+    run_es_distr()
 
 
 if __name__ == '__main__':
