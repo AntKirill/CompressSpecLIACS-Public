@@ -71,7 +71,8 @@ def test_landscape_visualization():
     select = utils.read_selection('designs/best-design-by-27-01')
     R = 16
     M = 640
-    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'harmonic')
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically(5, 16)
+    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'harmonic', seqs, 0)
     dim_reduction = utils.SegmentsDimReduction(M, R)
     select_reduced = dim_reduction.to_reduced(select)
     visualization = utils.LandscapeVisualization()
@@ -104,7 +105,7 @@ def test_transmission_profiles_2():
     dim_reduction = utils.SegmentsDimReduction(640, 16)
     selection1 = utils.read_selection('designs/best-design-by-27-01')
     selection1_reduced = dim_reduction.to_reduced(selection1)
-    selection2_reduced = utils.read_selection('designs/dSegmGood')
+    selection2_reduced = utils.read_selection('designs/newDesign')
     selection2 = dim_reduction.to_original(selection2_reduced)
     dist = d1(selection1, selection2)
     print(dist)
@@ -113,8 +114,20 @@ def test_transmission_profiles_2():
     selection2_reduced = [selection2_reduced[permutation[i]] for i in range(len(permutation))]
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
     vis = utils.SegmentedSequenceFiltersVisualization(inst, constants, dim_reduction)
-    vis.save_transmission_profiles(selection1_reduced, 'tp1.pdf', (4, 4))
-    vis.save_transmission_profiles(selection2_reduced, 'tp2.pdf', (4, 4))
+    vis.save_transmission_profiles(selection1_reduced, 'tp1.pdf', (2, 8))
+    vis.save_transmission_profiles(selection2_reduced, 'tp2.pdf', (1, 16))
+
+
+def test_tp():
+    instrument = utils.create_instrument()
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 26, 29, 30, 31, 32, 33, 37]
+    for i in ids:
+        selection = utils.read_selection(f'designsNew/d{i}')
+        dim_reduction = utils.SegmentsDimReduction(640, 16)
+        vis = utils.SegmentedSequenceFiltersVisualization(instrument, constants, dim_reduction)
+        select_reduced = dim_reduction.to_reduced(selection)
+        vis.save_transmission_profiles(select_reduced, f'designsNew/new_tp_{i}.pdf', (4, 4))
 
 
 def test_logs():
@@ -123,10 +136,12 @@ def test_logs():
     f = utils.ObjFunctionAverageSquare(instrument, constants, 1000)
     logger_f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test')
     wrapped_f = utils.add_segm_dim_reduction(logger_f, 640, 16)
-    selection = utils.read_selection('designs/dSegmGood')
-    N = 5
+    dim_reduction = utils.SegmentsDimReduction(640, 16)
+    selection = utils.read_selection('designsNew/d0')
+    reduced_selection = dim_reduction.to_reduced(selection)
+    N = 20
     for i in range(N):
-        f_obj = wrapped_f(selection)
+        f_obj = wrapped_f(reduced_selection)
         print(f_obj)
 
 
@@ -139,6 +154,18 @@ def test_logs_with_generator():
     f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test', generator)
     f = utils.add_segm_dim_reduction(f, 640, 16)
     alg = algorithms.MyES(None, 640, 6, 2, 2, 0., generator)
+    pop = [np.random.randint(0, instrument.filterlibrarysize, 16) for _ in range(2)]
+    alg(f, pop)
+
+
+def test_logs_with_generator_ea():
+    instrument = utils.create_instrument()
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'ea', budget=1000)
+    f = utils.ObjFunctionAverageSquare(instrument, constants, 1000)
+    f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test', generator)
+    f = utils.add_segm_dim_reduction(f, 640, 16)
+    alg = algorithms.MyES(None, 640, 6, 2, 2, 0.1, generator)
     pop = [np.random.randint(0, instrument.filterlibrarysize, 16) for _ in range(2)]
     alg(f, pop)
 
@@ -192,9 +219,29 @@ def test_generator_harmonic():
     print(f"Execution time is {result / n} seconds")
 
 
+def test_generator_ea():
+    inst = utils.create_instrument()
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
+
+    # selection = utils.read_selection('designs/newDesign')
+    # dim_red = utils.SegmentsDimReduction(640, 16)
+    # reduced_selection = dim_red.to_reduced(selection)
+
+    def f():
+        reduced_selection = np.random.randint(0, inst.filterlibrarysize, 16)
+        generator.generate_distant_offspring(reduced_selection, 0.15)
+        print(generator.dist_from_x)
+
+    timer = timeit.Timer(f)
+    n = 10
+    result = timer.timeit(n)
+    print(f"Execution time is {result / n} seconds")
+
+
 def test_generator_harmonic_1():
     inst = utils.create_instrument()
-    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16, 10**42)
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16,
+                                                                                         10 ** 42)
     generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs, 0)
     selection = utils.read_selection('designs/newDesign')
     dim_red = utils.SegmentsDimReduction(640, 16)
@@ -208,17 +255,19 @@ def test_generator_harmonic_1():
 
 def test_neighborhood_size_generator_harmonic_1():
     inst = utils.create_instrument()
-    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16, 10**42)
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic1', seqs, 0)
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16,
+                                                                                         10 ** 42)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'harmonic', seqs, 0)
     for i in range(1000):
         offspring = np.random.randint(0, inst.filterlibrarysize, 16)
         generator.generate_distant_offspring(offspring, 0)
-        print(generator.dists[generator.sorted_ids[len(seqs)-1]])
+        print(generator.dists[generator.sorted_ids[len(seqs) - 1]])
 
 
 def test_generator_uniform():
     inst = utils.create_instrument()
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'uniform')
+    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically(5, 16)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'uniform', seqs, 0)
     selection = utils.read_selection('designs/newDesign')
     dim_red = utils.SegmentsDimReduction(640, 16)
     reduced_selection = dim_red.to_reduced(selection)
@@ -364,4 +413,4 @@ def test_combinations_with_repetitions():
     correct_seqs = np.array([[0, 0], [0, 3], [1, 2], [2, 2], [3, 3]])
     assert (seqs == correct_seqs).all()
     do_test_combinations_with_repetitions_with_gaps(5, 3, 4)
-    do_test_combinations_with_repetitions_with_gaps(20, 32, 4*10**10)
+    do_test_combinations_with_repetitions_with_gaps(20, 32, 4 * 10 ** 10)
