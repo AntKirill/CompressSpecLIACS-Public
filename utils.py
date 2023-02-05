@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass
 
 import scipy
@@ -235,11 +236,14 @@ class SequenceDistanceKirill:
         return self.compute_all(seq1, seq2)[2]
 
     def get_permutation(self, seq1, seq2):
-        ind1, ind2, _ = self.compute_all(seq1, seq2)
+        return self.get_permutation_and_value(seq1, seq2)[0]
+
+    def get_permutation_and_value(self, seq1, seq2):
+        ind1, ind2, value = self.compute_all(seq1, seq2)
         permutation = np.zeros(len(seq1), dtype=int)
         for i in range(len(seq1)):
             permutation[ind1[i]] = ind2[i]
-        return permutation
+        return permutation, value
 
     def compute_all(self, s1, s2):
         d = np.zeros((len(s1), len(s2)))
@@ -275,7 +279,7 @@ def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, gener
     logger.watch(f, ['sron_bias', 'sron_precision'])
     logger_best.watch(f, ['sron_bias', 'sron_precision'])
     if generator is not None:
-        logger.watch(generator, ['distance_from_parent'])
+        logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
     wrapped_f.attach_logger(logger)
     wrapped_f.attach_logger(logger_best)
     return wrapped_f
@@ -284,3 +288,7 @@ def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, gener
 def add_segm_dim_reduction(f, original_dim, reduced_dim):
     dim_reduction = SegmentsDimReduction(original_dim, reduced_dim)
     return lambda reduced_arg: f(dim_reduction.to_original(reduced_arg))
+
+
+if __name__ == '__main__':
+    print(globals()[sys.argv[1]](*sys.argv[2:]))

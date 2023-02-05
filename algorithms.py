@@ -5,7 +5,8 @@ import cma
 import numpy as np
 
 import mipego
-from utils import FilterDistanceFactory, SequenceDistanceFactory
+
+from utils import FilterDistanceFactory, SequenceDistanceFactory, SequenceDistanceKirill
 
 
 class Individual:
@@ -155,6 +156,9 @@ class AbstractES(ABC):
     def survival_selection(self, population, new_population, mu_):
         pass
 
+    def update_parameters(self):
+        pass
+
     def __call__(self, obj_function, initial=None):
         """
         Minimization of objective function
@@ -175,6 +179,7 @@ class AbstractES(ABC):
                 self.next_population.append(Individual(offspring, obj_value))
             self.population = self.survival_selection(
                 self.population, self.next_population, self.mu_)
+            self.update_parameters()
         self.population.sort(key=lambda ind: ind.obj_value)
         return self.population[0]
 
@@ -224,6 +229,76 @@ class MyES1(MyES):
         return offspring
 
 
+def harmonic_sample(n):
+    if n <= 0:
+        return 0
+    c = 0
+    for i in range(1, n + 1):
+        c += i ** -1
+    c = c ** -1
+    p = [c / i for i in range(1, n + 1)]
+    return np.random.choice([i for i in range(0, n)], p=p)
+
+
+class PermutationSeqDistanceInverse:
+    def __init__(self, budget, mu_, lambda_, initial_individual, matrix_sorted_rows, target_distance):
+        self.lambda_ = lambda_
+        self.mu_ = mu_
+        self.budget = budget
+        self.initial_individual = initial_individual
+        self.dim = len(initial_individual)
+        self.matrix_sorted_rows = matrix_sorted_rows
+        self.target_distance = target_distance
+        self.L = len(matrix_sorted_rows[0])
+
+    def __obj_function(self, d1, x):
+        pi, value = d1.get_permutation_and_value(self.initial_individual, x)
+        obj_distance = abs(value - self.target_distance)
+        return pi, value, obj_distance
+
+    def mutation(self, parent, parent_obj):
+        pi, value, _ = parent_obj
+        rep_cnt, max_rep_cnt = 0, 10
+        while rep_cnt < max_rep_cnt:
+            index_initial = np.random.randint(0, self.dim)
+            index_parent = pi[index_initial]
+            filter_initial = self.initial_individual[index_initial]
+            filter_parent = parent[index_parent]
+            pos = None
+            for i in range(self.L):
+                dist_initial, filter_id = self.matrix_sorted_rows[filter_initial][i]
+                if filter_id == filter_parent:
+                    pos = i
+                    break
+            assert pos is not None
+            to_pos = pos
+            if value < self.target_distance and pos != self.L - 1:
+                to_pos = pos + 1 + harmonic_sample(self.L - pos - 1)
+            elif value > self.target_distance and pos != 0:
+                to_pos = pos - 1 - harmonic_sample(pos)
+            to_filter = self.matrix_sorted_rows[filter_initial][to_pos][1]
+            if to_filter != filter_parent:
+                offspring = np.copy(parent)
+                offspring[index_parent] = to_filter
+                return offspring
+            rep_cnt += 1
+        return np.copy(parent)
+
+    def __call__(self, d1: SequenceDistanceKirill):
+        parent = np.copy(self.initial_individual)
+        parent_obj = ([i for i in range(0, self.dim)], 0., self.target_distance)
+        for iteration in range(self.budget // self.lambda_):
+            pop = []
+            for i in range(self.lambda_):
+                offspring = self.mutation(parent, parent_obj)
+                offspring_obj = self.__obj_function(d1, offspring)
+                pop.append((offspring, offspring_obj))
+            candidate = min(pop, key=lambda x: x[1][2])
+            if candidate[1][2] < parent_obj[2]:
+                parent, parent_obj = candidate
+        return parent
+
+
 class AbstractGenerator(ABC):
     def __init__(self, d1) -> None:
         self.d1 = d1
@@ -237,17 +312,45 @@ class AbstractGenerator(ABC):
     def distance_from_parent(self):
         return self.dist_from_x
 
+    @property
+    def target_distance_from_parent(self):
+        return self.dist_from_x
+
+    @staticmethod
+    def _get_matrix_sorted_rows(matrix):
+        matrix_sorted_rows = []
+        for i in range(len(matrix)):
+            tmp = [(matrix[i][j], j) for j in range(len(matrix[i]))]
+            tmp.sort()
+            matrix_sorted_rows.append(tmp)
+        return matrix_sorted_rows
+
+
+class GeneratorEA(AbstractGenerator):
+    def __init__(self, filter_dist_matrix, d1, budget):
+        super().__init__(d1)
+        self.matrix = filter_dist_matrix
+        self.matrix_sorted_rows = self._get_matrix_sorted_rows(self.matrix)
+        self.budget = budget
+        self.target_dist_from_x = None
+
+    def generate_distant_offspring(self, x, d):
+        self.target_dist_from_x = d
+        ea = PermutationSeqDistanceInverse(self.budget, 1, 5, x, self.matrix_sorted_rows, d)
+        y = ea(self.d1)
+        self.dist_from_x = self.d1(x, y)
+        return y
+
+    @property
+    def target_distance_from_parent(self):
+        return self.target_dist_from_x
+
 
 class Generator1(AbstractGenerator):
     def __init__(self, filter_dist_matrix, d1):
         super().__init__(d1)
         self.matrix = filter_dist_matrix
-        self.d1 = d1
-        self.matrix_sorted_rows = []
-        for i in range(len(self.matrix)):
-            tmp = [(self.matrix[i][j], j) for j in range(len(self.matrix[i]))]
-            tmp.sort()
-            self.matrix_sorted_rows.append(tmp)
+        self.matrix_sorted_rows = self._get_matrix_sorted_rows(self.matrix)
 
     def generate_distant_offspring(self, x, d):
         max_v = float('-inf')
@@ -413,7 +516,7 @@ class Generator(AbstractGenerator):
         return self.__construct_individual(res[0])
 
 
-def create_offspring_generator(inst, d0_method, d1_method, generating_method, seqs=None, offset=None):
+def create_offspring_generator(inst, d0_method, d1_method, generating_method, seqs=None, offset=None, budget=None):
     dist_matrix = FilterDistanceFactory(inst) \
         .create_precomputed_filter_distance_matrix(d0_method, f'precomputedFiltersDists/method{d0_method}.txt')
 
@@ -431,3 +534,5 @@ def create_offspring_generator(inst, d0_method, d1_method, generating_method, se
         return GeneratorHarmonic(dist_matrix, d1, seqs, offset)
     if generating_method == 'uniform':
         return GeneratorUniform(dist_matrix, d1, seqs, offset)
+    if generating_method == 'ea':
+        return GeneratorEA(dist_matrix, d1, budget)
