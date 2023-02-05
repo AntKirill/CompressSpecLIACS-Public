@@ -238,6 +238,14 @@ def test_generator_ea():
     print(f"Execution time is {result / n} seconds")
 
 
+def test_distribution():
+    mi, ma = 0., 0.01
+    print(algorithms.Beta().sample(mi, ma))
+    print(algorithms.Uniform().sample(mi, ma))
+    print(algorithms.Normal().sample(mi, ma))
+    print(algorithms.Exponential().sample(mi, ma))
+
+
 def test_generator_harmonic_1():
     inst = utils.create_instrument()
     seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically_with_gaps(inst.filterlibrarysize, 16,
