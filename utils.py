@@ -96,7 +96,7 @@ class SequenceFiltersVisualization:
         n, m = p
         sz = len(profiles)
         fig, axs = plt.subplots(n, m)
-        plt.subplots_adjust(wspace=0, hspace=0)
+        plt.subplots_adjust(wspace=0.05, hspace=0.05)
 
         def get_axs(i, j):
             if n == 1 or m == 1:
@@ -105,12 +105,33 @@ class SequenceFiltersVisualization:
 
         for i in range(n):
             for j in range(m):
-                if i * m + j < sz:
-                    get_axs(i, j).plot(spectral_range, profiles[i * m + j], linewidth=0.4)
+                profile_number = i * m + j
+                if profile_number < sz:
+                    get_axs(i, j).plot(spectral_range, profiles[profile_number], linewidth=0.4)
                 get_axs(i, j).set_xticks([])
                 get_axs(i, j).set_yticks([])
                 [i.set_linewidth(0.1) for i in get_axs(i, j).spines.values()]
                 # get_axs(i, j).axis('off')
+
+        colors = ['red', 'green', 'orange', 'purple', 'blue', 'cyan']
+        cnt = 0
+        is_first = True
+        cur_color = colors[0]
+        for i in range(n):
+            for j in range(m):
+                profile_number = i * m + j
+                if profile_number < sz:
+                    if (profile_number > 0 and sequence[profile_number - 1] == sequence[profile_number]) or (
+                            profile_number < sz - 1 and sequence[profile_number + 1] == sequence[profile_number]):
+                        if is_first:
+                            cur_color = colors[cnt]
+                            cnt = (cnt + 1) % len(colors)
+                            is_first = False
+                        [i.set_linewidth(1) for i in get_axs(i, j).spines.values()]
+                        [i.set_edgecolor(cur_color) for i in get_axs(i, j).spines.values()]
+                    else:
+                        is_first = True
+
         fig.text(0.5, 0.07, 'wavelength (nm)', ha='center')
         fig.text(0.09, 0.5, 'transmission', va='center', rotation='vertical')
         fig.savefig(file_name)
@@ -133,6 +154,7 @@ class LandscapeVisualization:
         plt.scatter(y[:len(y) - 1, 0], y[:len(y) - 1, 1], c=[jet_cmap(i) for i in values[:len(y) - 1]])
         plt.scatter(y[len(y) - 1, 0], y[len(y) - 1, 1], c=[jet_cmap(values[len(y) - 1])], marker='x')
         fig.savefig('manifold.pdf')
+        plt.close()
 
 
 class SegmentedSequenceFiltersVisualization(SequenceFiltersVisualization):
