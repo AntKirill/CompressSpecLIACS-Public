@@ -16,6 +16,71 @@ class Individual:
         self.obj_value = obj_value
 
 
+class AbstractSimulatedAnnealing(ABC):
+    def __init__(self, budget):
+        self.budget = budget
+        self.t0 = 10**1
+        self.a = 0.9999
+        self.t = None
+        self.update_prob = None
+        self.cur_obj_value = None
+
+    def __call__(self, f, s_init):
+        self.update_prob = None
+        self.cur_obj_value = None
+        self.t = self.t0
+        ind = Individual(s_init, f(s_init))
+        best = ind
+        for iteration in range(self.budget):
+            self.cur_obj_value = ind.obj_value
+            self.t = self._update_temperature(self.t)
+            x = self._select_neighbour(ind.genotype)
+            candidate = Individual(x, f(x))
+            if candidate.obj_value < ind.obj_value:
+                best = candidate
+            if self._get_step_probability(ind.obj_value, candidate.obj_value, self.t) >= np.random.uniform(0, 1):
+                ind = candidate
+        return best.genotype
+
+    def _update_temperature(self, t):
+        return t * self.a
+
+    def _get_step_probability(self, f_old, f_new, t):
+        if f_new < f_old:
+            self.update_prob = 1.
+        else:
+            self.update_prob = np.exp((f_old - f_new) * 1000 / t)
+        return self.update_prob
+
+    @abstractmethod
+    def _select_neighbour(self, x):
+        pass
+
+    @property
+    def temperature(self):
+        return self.t
+
+    @property
+    def current_solution_quality(self):
+        return self.cur_obj_value
+
+    @property
+    def last_update_prob(self):
+        return self.update_prob
+
+
+class FiltersPhenoSimulatedAnnealing(AbstractSimulatedAnnealing):
+    def __init__(self, budget, generator, neighbourhood_dist):
+        super().__init__(budget)
+        self.generator = generator
+        self.distribution = Uniform()
+        self.d = neighbourhood_dist
+
+    def _select_neighbour(self, x):
+        dist = self.distribution.sample(0., self.d)
+        return self.generator.generate_distant_offspring(x, dist)
+
+
 class RLSSubspaces:
     def __init__(self, mutation, budget, M, L, seed):
         self.mutation = mutation
