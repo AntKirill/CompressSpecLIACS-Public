@@ -148,12 +148,13 @@ def test_logs():
 def test_logs_with_generator():
     instrument = utils.create_instrument()
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
-    seqs = algorithms.CombinationsWithRepetitions().generate_lexicographically(5, 16)
-    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'harmonic', seqs, 0)
+    generator = algorithms.create_offspring_generator(instrument, 2, 'kirill', 'ea', budget=1000)
     f = utils.ObjFunctionAverageSquare(instrument, constants, 1000)
-    f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test', generator)
+    f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test')
     f = utils.add_segm_dim_reduction(f, 640, 16)
-    alg = algorithms.MyES(None, 640, 6, 2, 2, 0., generator)
+    utils.logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
+    distr = algorithms.Exponential()
+    alg = algorithms.MyESFixedDistDistribution(None, 640, 6, 2, 2, 0.01, generator, distr)
     pop = [np.random.randint(0, instrument.filterlibrarysize, 16) for _ in range(2)]
     alg(f, pop)
 
