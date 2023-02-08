@@ -43,6 +43,7 @@ class MyLogger:
         self.log_file_path = None
         self.all_extra_info_getters = []
         self.algorithms = []
+        self.problem_dim = None
 
     @staticmethod
     def __generate_dir_name(name, x=0):
@@ -57,6 +58,8 @@ class MyLogger:
     def watch(self, algorithm, extra_data: List):
         self.algorithms.append(algorithm)
         self.all_extra_info_getters.append(extra_data)
+        for extra_info in extra_data:
+            self.meta['attributes'].append(extra_info)
 
     def set_up_logger_for_problem(self, function_id, function_name, is_maximization, instance, dim):
         self.log_file_path = f'data_f{function_id}_{function_name}/IOHprofiler_f{function_id}_DIM{dim}.dat'
@@ -67,23 +70,25 @@ class MyLogger:
         self.meta['function_name'] = function_name
         self.meta['maximization'] = is_maximization
         self.instance = instance
+        self.problem_dim = dim
         self.meta['scenarios'].append({'dimension': dim, 'path': self.log_file_path, 'runs': [
                                       {'instance': instance, 'evals': 0, 'best': {}}]})
         os.makedirs(os.path.dirname(self.log_file_full_path), exist_ok=True)
-        for extra_info_getter in self.all_extra_info_getters:
-            for extra_info in extra_info_getter:
-                self.meta['attributes'].append(extra_info)
-        with open(self.log_file_full_path, 'a') as f:
+
+    def log_column_names(self):
+        with open(self.log_file_full_path, 'w') as f:
             f.write('evaluations raw_y')
             for extra_info_getter in self.all_extra_info_getters:
                 for extra_info in extra_info_getter:
                     f.write(f' {extra_info}')
             if self.isLogArg:
-                for i in range(dim):
+                for i in range(self.problem_dim):
                     f.write(f' x{i}')
             f.write('\n')
 
     def log_eval(self, evaluation_number, arg, value):
+        if not os.path.exists(self.log_file_full_path):
+            self.log_column_names()
         with open(self.log_file_full_path, 'a') as f:
             f.write(f'{evaluation_number} {value}')
             for i in range(len(self.all_extra_info_getters)):
