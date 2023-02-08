@@ -1,16 +1,15 @@
 import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import matplotlib as mpl
+import numpy as np
 import scipy
 import sklearn.manifold
-import matplotlib as mpl
 from matplotlib import pyplot as plt
-from sklearn import preprocessing
 
 import instrumentsimulator
-import numpy as np
 import mylogger
-from abc import ABC, abstractmethod
 
 
 def read_selection(file_name):
@@ -113,7 +112,7 @@ class SequenceFiltersVisualization:
                 [i.set_linewidth(0.1) for i in get_axs(i, j).spines.values()]
                 # get_axs(i, j).axis('off')
 
-        colors = ['red', 'green', 'orange', 'purple', 'blue', 'cyan']
+        colors = ['red', 'blue', 'orange', 'purple', 'cyan', 'green']
         cnt = 0
         is_first = True
         cur_color = colors[0]
@@ -121,15 +120,16 @@ class SequenceFiltersVisualization:
             for j in range(m):
                 profile_number = i * m + j
                 if profile_number < sz:
-                    if (profile_number > 0 and sequence[profile_number - 1] == sequence[profile_number]) or (
-                            profile_number < sz - 1 and sequence[profile_number + 1] == sequence[profile_number]):
+                    if profile_number < sz - 1 and sequence[profile_number + 1] == sequence[profile_number]:
                         if is_first:
                             cur_color = colors[cnt]
                             cnt = (cnt + 1) % len(colors)
                             is_first = False
-                        [i.set_linewidth(1) for i in get_axs(i, j).spines.values()]
+                        [i.set_linewidth(2) for i in get_axs(i, j).spines.values()]
                         [i.set_edgecolor(cur_color) for i in get_axs(i, j).spines.values()]
-                    else:
+                    elif not is_first:
+                        [i.set_linewidth(2) for i in get_axs(i, j).spines.values()]
+                        [i.set_edgecolor(cur_color) for i in get_axs(i, j).spines.values()]
                         is_first = True
 
         fig.text(0.5, 0.07, 'wavelength (nm)', ha='center')
@@ -288,6 +288,7 @@ class SequenceDistanceFactory:
 
 def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, generator=None):
     wrapped_f = mylogger.MyObjectiveFunctionWrapper(f, dim=ndim, fname='SRON_nCH4_noisy_recovery')
+    global logger
     logger = mylogger.MyLogger(root=root_name,
                                folder_name="everyeval",
                                algorithm_name=alg_name,
