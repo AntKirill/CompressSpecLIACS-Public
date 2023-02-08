@@ -60,6 +60,29 @@ def run_es_distr():
     alg(f, pop)
 
 
+def run_sa():
+    inst = utils.create_instrument()
+    M = 640  # number of filters in the sequeance of filters
+    R = 16  # reduced dimensionality
+    lib_size = inst.filterlibrarysize
+
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
+
+    f = utils.ObjFunctionAverageSquare(inst, constants)
+    f = utils.add_logger(f, M, 'experiments-sa', 'sa',
+                         'Simulated Annealing using permutation sequence distances based on method 2. For generation of the solution in the neighbourhood generatorEA is used')
+    f = utils.add_segm_dim_reduction(f, M, R)
+
+    alg = algorithms.FiltersPhenoSimulatedAnnealing(20000, generator, 0.002)
+    utils.logger.watch(alg, ['temperature', 'current_solution_quality', 'last_update_prob'])
+    utils.logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
+    pop = np.random.randint(0, lib_size, R)
+
+    alg(f, pop)
+
+
 def run_rls():
     inst = utils.create_instrument()
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
@@ -107,7 +130,7 @@ def run_mies():
 
 
 def main():
-    run_es_distr()
+    run_sa()
 
 
 if __name__ == '__main__':
