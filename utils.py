@@ -146,7 +146,7 @@ class LandscapeVisualization:
         tsne = sklearn.manifold.TSNE(perplexity=50, metric=d1)
         y = tsne.fit_transform(X)
         fig = plt.figure()
-        jet_cmap = mpl.cm.get_cmap(name='jet')
+        jet_cmap = mpl.colormaps['jet']
         # values = np.random.uniform(0.0004, 0.002, len(X))
         values = np.array([f(x) for x in X])
         mi, ma = values.min(), values.max()
