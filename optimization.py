@@ -75,12 +75,14 @@ def run_sa():
                          'Simulated Annealing using permutation sequence distances based on method 2. For generation of the solution in the neighbourhood generatorEA is used')
     f = utils.add_segm_dim_reduction(f, M, R)
 
-    alg = algorithms.FiltersPhenoSimulatedAnnealing(20000, generator, 0.002)
+    alg = algorithms.FiltersPhenoSimulatedAnnealing(100, 0, 0.99, generator, 0.000001)
     utils.logger.watch(alg, ['temperature', 'current_solution_quality', 'last_update_prob'])
     utils.logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
-    pop = np.random.randint(0, lib_size, R)
+    pop = utils.read_selection('designs/dTmp')
+    dim_reduction = utils.SegmentsDimReduction(M, R)
+    reduced_pop = dim_reduction.to_reduced(pop)
 
-    alg(f, pop)
+    alg(f, reduced_pop)
 
 
 def run_rls():
@@ -131,6 +133,9 @@ def run_mies():
 
 def main():
     run_sa()
+    import os, psutil
+    process = psutil.Process(os.getpid())
+    print(process.memory_info().rss / 1024 / 1024, 'MB')
 
 
 if __name__ == '__main__':
