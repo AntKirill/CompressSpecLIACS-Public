@@ -17,10 +17,10 @@ class Individual:
 
 
 class AbstractSimulatedAnnealing(ABC):
-    def __init__(self, budget):
+    def __init__(self, budget, t0=10, a=0.9999):
         self.budget = budget
-        self.t0 = 10**1
-        self.a = 0.9999
+        self.t0 = t0
+        self.a = a
         self.t = None
         self.update_prob = None
         self.cur_obj_value = None
@@ -70,8 +70,8 @@ class AbstractSimulatedAnnealing(ABC):
 
 
 class FiltersPhenoSimulatedAnnealing(AbstractSimulatedAnnealing):
-    def __init__(self, budget, generator, neighbourhood_dist):
-        super().__init__(budget)
+    def __init__(self, budget, t0, a, generator, neighbourhood_dist):
+        super().__init__(budget, t0, a)
         self.generator = generator
         self.distribution = Uniform()
         self.d = neighbourhood_dist
