@@ -22,7 +22,7 @@ class LoggingAll:
 
 
 class MyLogger:
-    def __init__(self, root='experiments', folder_name='all', algorithm_name='UNKNOWN', suite='unkown suite', algorithm_info='algorithm_info', logStrategy=LoggingAll, isLogArg=False):
+    def __init__(self, root='experiments', folder_name='all', algorithm_name='UNKNOWN', suite='unkown suite', algorithm_info='algorithm_info', logStrategy=LoggingAll, isLogArg=False, verbose=True):
         self.root = root
         self.folder_name = MyLogger.__generate_dir_name(
             f'{root}/{folder_name}')
@@ -36,6 +36,7 @@ class MyLogger:
                      'scenarios': []}
         self.myLogStrategy = logStrategy()
         self.isLogArg = isLogArg
+        self.verbose = verbose
         self.instance = None
         self.meta_full_path = None
         self.meta_path = None
@@ -89,6 +90,8 @@ class MyLogger:
     def log_eval(self, evaluation_number, arg, value):
         if not os.path.exists(self.log_file_full_path):
             self.log_column_names()
+            if self.verbose:
+                print(f'Logging to {self.folder_name}')
         with open(self.log_file_full_path, 'a') as f:
             f.write(f'{evaluation_number} {value}')
             for i in range(len(self.all_extra_info_getters)):
