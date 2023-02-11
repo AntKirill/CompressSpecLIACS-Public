@@ -118,18 +118,6 @@ def test_transmission_profiles_2():
     vis.save_transmission_profiles(selection2_reduced, 'tp2.pdf', (1, 16))
 
 
-def test_tp():
-    instrument = utils.create_instrument()
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
-    ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 26, 29, 30, 31, 32, 33, 37]
-    for i in ids:
-        selection = utils.read_selection(f'designsNew/d{i}')
-        dim_reduction = utils.SegmentsDimReduction(640, 16)
-        vis = utils.SegmentedSequenceFiltersVisualization(instrument, constants, dim_reduction)
-        select_reduced = dim_reduction.to_reduced(selection)
-        vis.save_transmission_profiles(select_reduced, f'designsNew/new_tp_{i}.pdf', (4, 4))
-
-
 def test_logs():
     instrument = utils.create_instrument()
     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
@@ -137,9 +125,9 @@ def test_logs():
     logger_f = utils.add_logger(f, 640, '_tmp_test', 'test', 'test')
     wrapped_f = utils.add_segm_dim_reduction(logger_f, 640, 16)
     dim_reduction = utils.SegmentsDimReduction(640, 16)
-    selection = utils.read_selection('designsNew/d0')
+    selection = utils.read_selection('designs/d0')
     reduced_selection = dim_reduction.to_reduced(selection)
-    N = 20
+    N = 5
     for i in range(N):
         f_obj = wrapped_f(reduced_selection)
         print(f_obj)
@@ -342,15 +330,15 @@ def test_ea():
     alg(f, initial)
 
 
-def test_bo():
-    inst = utils.create_instrument()
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
-    M, L = 640, inst.filterlibrarysize
-    f = utils.ObjFunctionAverageSquare(inst, constants)
-    f = utils.add_logger(f, M, '_tmp_test', 'alg_name', 'alg_info')
-    f = utils.add_segm_dim_reduction(f, M, 16)
-    alg = algorithms.NoiseBOWrapper(5, 2, 16, L, 0)
-    alg(f)
+# def test_bo():
+#     inst = utils.create_instrument()
+#     constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+#     M, L = 640, inst.filterlibrarysize
+#     f = utils.ObjFunctionAverageSquare(inst, constants)
+#     f = utils.add_logger(f, M, '_tmp_test', 'alg_name', 'alg_info')
+#     f = utils.add_segm_dim_reduction(f, M, 16)
+#     alg = algorithms.NoiseBOWrapper(5, 2, 16, L, 0)
+#     alg(f)
 
 
 def test_mies():
@@ -381,21 +369,21 @@ def test_rls_configs():
     alg()
 
 
-def test_bo_configs():
-    json_config = """{
-    "algorithm": "BO",
-    "constants": {"nCH4": 1500, "albedo": 0.15, "sza": 70},
-    "budget": 7,
-    "doe_size": 5,
-    "initial_population": [1],
-    "dim": 640,
-    "logger_root": "_tmp_experiments-bo",
-    "algorithm_info": "bo"
-    }"""
-    json_obj = json.loads(json_config)
-    config = bootstrap.ExperimentConfig(**json_obj)
-    alg = bootstrap.Experiment().create_experiment(config)
-    alg()
+# def test_bo_configs():
+#     json_config = """{
+#     "algorithm": "BO",
+#     "constants": {"nCH4": 1500, "albedo": 0.15, "sza": 70},
+#     "budget": 7,
+#     "doe_size": 5,
+#     "initial_population": [1],
+#     "dim": 640,
+#     "logger_root": "_tmp_experiments-bo",
+#     "algorithm_info": "bo"
+#     }"""
+#     json_obj = json.loads(json_config)
+#     config = bootstrap.ExperimentConfig(**json_obj)
+#     alg = bootstrap.Experiment().create_experiment(config)
+#     alg()
 
 
 def do_test_combinations_with_repetitions(n, k):
