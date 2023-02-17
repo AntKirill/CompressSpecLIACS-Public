@@ -81,6 +81,25 @@ class FiltersPhenoSimulatedAnnealing(AbstractSimulatedAnnealing):
         return self.generator.generate_distant_offspring(x, dist)
 
 
+class PhLocalSearch:
+    def __init__(self, budget, generator, max_dist, distribution):
+        self.budget = budget
+        self.generator = generator
+        self.max_dist = max_dist
+        self.distribution = distribution
+
+    def __call__(self, f, initial):
+        x = initial
+        x_obj = f(x)
+        for iteration in range(self.budget):
+            d = self.distribution.sample(0., self.max_dist)
+            y = self.generator.generate_distant_offspring(x, d)
+            y_obj = f(y)
+            if x_obj > y_obj:
+                x, x_obj = y, y_obj
+        return x, x_obj
+
+
 class RLSSubspaces:
     def __init__(self, mutation, budget, M, L, seed):
         self.mutation = mutation
@@ -414,10 +433,50 @@ class PermutationSeqDistanceInverse:
         return parent
 
 
+class DistanceInverse:
+    def __init__(self, budget, mu_, lambda_, initial_individual, matrix_sorted_rows, target_distance):
+        self.lambda_ = lambda_
+        self.mu_ = mu_
+        self.budget = budget
+        self.initial_individual = initial_individual
+        self.dim = len(initial_individual)
+        self.matrix_sorted_rows = matrix_sorted_rows
+        self.target_distance = target_distance
+        self.L = len(matrix_sorted_rows[0])
+
+    def __obj_function(self, d1, x):
+        value = d1(self.initial_individual, x)
+        obj_distance = abs(value - self.target_distance)
+        return None, value, obj_distance
+
+    def mutation(self, parent, parent_obj):
+        index = np.random.randint(0, self.dim)
+        to = np.random.randint(0, self.L)
+        offspring = np.copy(parent)
+        offspring[index] = to
+        return offspring
+
+    def __call__(self, d1):
+        parent = np.copy(self.initial_individual)
+        parent_obj = ([i for i in range(0, self.dim)], 0., self.target_distance)
+        for iteration in range(self.budget // self.lambda_):
+            pop = []
+            for i in range(self.lambda_):
+                offspring = self.mutation(parent, parent_obj)
+                offspring_obj = self.__obj_function(d1, offspring)
+                pop.append((offspring, offspring_obj))
+            candidate = min(pop, key=lambda x: x[1][2])
+            if candidate[1][2] < parent_obj[2]:
+                parent, parent_obj = candidate
+        return parent
+
+
 class AbstractGenerator(ABC):
     def __init__(self, d1) -> None:
         self.d1 = d1
         self.dist_from_x = None
+        self.hamming_dist_from_x = None
+        self.hamming_d = SequenceDistanceFactory(None).create_sequence_distance('hamming')
 
     @abstractmethod
     def generate_distant_offspring(self, x, d):
@@ -431,6 +490,10 @@ class AbstractGenerator(ABC):
     def target_distance_from_parent(self):
         return self.dist_from_x
 
+    @property
+    def hamming_distance_from_parent(self):
+        return self.hamming_dist_from_x
+
     @staticmethod
     def _get_matrix_sorted_rows(matrix):
         matrix_sorted_rows = []
@@ -442,19 +505,21 @@ class AbstractGenerator(ABC):
 
 
 class GeneratorEA(AbstractGenerator):
-    def __init__(self, filter_dist_matrix, d1, budget):
+    def __init__(self, filter_dist_matrix, d1, budget, method=PermutationSeqDistanceInverse):
         super().__init__(d1)
         self.matrix = filter_dist_matrix
         self.matrix_sorted_rows = self._get_matrix_sorted_rows(self.matrix)
         self.budget = budget
         self.target_dist_from_x = None
         self.distribution = scipy.stats.beta(2, 8)
+        self.method = method
 
     def generate_distant_offspring(self, x, d):
         self.target_dist_from_x = d
-        ea = PermutationSeqDistanceInverse(self.budget, 1, 5, x, self.matrix_sorted_rows, d)
+        ea = self.method(self.budget, 1, 5, x, self.matrix_sorted_rows, d)
         y = ea(self.d1)
         self.dist_from_x = self.d1(x, y)
+        self.hamming_dist_from_x = self.hamming_d(x, y)
         return y
 
     @property
@@ -632,14 +697,14 @@ class Generator(AbstractGenerator):
         return self.__construct_individual(res[0])
 
 
-def create_offspring_generator(inst, d0_method, d1_method, generating_method, seqs=None, offset=None, budget=None):
+def create_offspring_generator(inst, d0_method, d1_method, generating_method, seqs=None, offset=None, budget=None, M=None, R=None):
     dist_matrix = FilterDistanceFactory(inst) \
         .create_precomputed_filter_distance_matrix(d0_method, f'precomputedFiltersDists/method{d0_method}.txt')
 
     def d0(s1, s2):
         return dist_matrix[int(s1), int(s2)]
 
-    d1 = SequenceDistanceFactory(d0).create_sequence_distance(d1_method)
+    d1 = SequenceDistanceFactory(d0=d0, instrument=inst, M=M, R=R).create_sequence_distance(d1_method)
     if generating_method == 'cma':
         return Generator(dist_matrix, d1)
     if generating_method == 1:
@@ -652,3 +717,5 @@ def create_offspring_generator(inst, d0_method, d1_method, generating_method, se
         return GeneratorUniform(dist_matrix, d1, seqs, offset)
     if generating_method == 'ea':
         return GeneratorEA(dist_matrix, d1, budget)
+    if generating_method == 'ea1':
+        return GeneratorEA(dist_matrix, d1, budget, DistanceInverse)

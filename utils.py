@@ -226,7 +226,7 @@ class FilterDistanceFactory:
         self.instrument = instrument
 
     def create_filters_distance(self, method):
-        return lambda filter1, filter2: self.instrument.getDistance(filter1, filter2, method)
+        return lambda filter1, filter2: self.instrument.getDistanceFilter(filter1, filter2, method)
 
     def create_precomputed_filters_distance(self, method, file_name=None):
         dist = self.create_precomputed_filter_distance_matrix(method, file_name)
@@ -243,10 +243,11 @@ class FilterDistanceFactory:
             assert file_name.find(f'method{method}') != -1
             with open(file_name, 'r') as f:
                 for i in range(lib_size):
-                    for j in range(lib_size):
+                    for j in range(i + 1, lib_size):
                         i_, j_, d = f.readline().split()
                         assert int(i_) == i and int(j_) == j
                         dist[i, j] = float(d)
+                        dist[j, i] = float(d)
         return dist
 
 
@@ -276,14 +277,36 @@ class SequenceDistanceKirill:
         return row_ind, col_ind, d[row_ind, col_ind].sum()
 
 
+class SequenceDistanceHamming:
+    def __call__(self, seq1, seq2):
+        d = max(len(seq1), len(seq2)) - min(len(seq1), len(seq2))
+        for i in range(min(len(seq1), len(seq2))):
+            if seq1[i] != seq2[i]:
+                d += 1
+        return d
+
+
 class SequenceDistanceFactory:
-    def __init__(self, d0) -> None:
+    def __init__(self, d0=None, instrument=None, M=None, R=None) -> None:
         self.d0 = d0
+        self.instrument = instrument
+        self.M = M
+        self.R = R
 
     def create_sequence_distance(self, method_sequence_distance):
         if method_sequence_distance == 'kirill':
             seq_dist = SequenceDistanceKirill(self.d0)
             return seq_dist
+        if method_sequence_distance == 'hamming':
+            return SequenceDistanceHamming()
+        if method_sequence_distance == '2':
+            dim_red = SegmentsDimReduction(self.M, self.R)
+            return lambda seq1, seq2: self.instrument.getDistanceFilterSet(dim_red.to_original(seq1),
+                                                                           dim_red.to_original(seq2), 2)
+        if method_sequence_distance == '3':
+            dim_red = SegmentsDimReduction(self.M, self.R)
+            return lambda seq1, seq2: self.instrument.getDistanceFilterSet(dim_red.to_original(seq1),
+                                                                           dim_red.to_original(seq2), 3)
 
 
 def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, generator=None):

@@ -27,7 +27,7 @@ def test_dist():
             assert d0(f1, f2) + d0(f2, f3) > d0(f1, f3) - eps
 
 
-def test_sequence_dist():
+def test_sequence_dist_kirill():
     inst = utils.create_instrument()
     d0 = utils.FilterDistanceFactory(inst).create_precomputed_filters_distance(2, 'precomputedFiltersDists/method2.txt')
     d1 = utils.SequenceDistanceFactory(d0).create_sequence_distance('kirill')
@@ -37,6 +37,24 @@ def test_sequence_dist():
     permutation = d1.get_permutation(seq1, seq2)
     dist_perm = sum(d0(seq1[i], seq2[permutation[i]]) for i in range(len(permutation)))
     assert dist == pytest.approx(dist_perm, 0.0001)
+    print(dist)
+
+
+def test_sequence_dist_2():
+    inst = utils.create_instrument()
+    d1 = utils.SequenceDistanceFactory(instrument=inst).create_sequence_distance('2')
+    seq1 = utils.read_selection('designs/newDesign')
+    seq2 = utils.read_selection('designs/dNoSegmInit')
+    dist = d1(seq1, seq2)
+    print(dist)
+
+
+def test_sequence_dist_3():
+    inst = utils.create_instrument()
+    d1 = utils.SequenceDistanceFactory(instrument=inst).create_sequence_distance('3')
+    seq1 = utils.read_selection('designs/newDesign')
+    seq2 = utils.read_selection('designs/dNoSegmInit')
+    dist = d1(seq1, seq2)
     print(dist)
 
 
@@ -208,23 +226,35 @@ def test_generator_harmonic():
     print(f"Execution time is {result / n} seconds")
 
 
-def test_generator_ea():
+def do_test_generator_ea(method_d0, method_d1, method_gen, dist):
     inst = utils.create_instrument()
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
-
-    # selection = utils.read_selection('designs/newDesign')
-    # dim_red = utils.SegmentsDimReduction(640, 16)
-    # reduced_selection = dim_red.to_reduced(selection)
+    generator = algorithms.create_offspring_generator(inst, method_d0, method_d1, method_gen, budget=1000, M=640, R=16)
 
     def f():
         reduced_selection = np.random.randint(0, inst.filterlibrarysize, 16)
-        generator.generate_distant_offspring(reduced_selection, 0.15)
-        print(generator.dist_from_x)
+        generator.generate_distant_offspring(reduced_selection, dist)
+        print(generator.dist_from_x, flush=True)
 
     timer = timeit.Timer(f)
     n = 10
     result = timer.timeit(n)
     print(f"Execution time is {result / n} seconds")
+
+
+def test_generator_ea():
+    do_test_generator_ea(2, 'kirill', 'ea', 1e-5)
+
+
+def test_generator_ea1_with_seqdist_kirill():
+    do_test_generator_ea(2, 'kirill', 'ea1', 1e-5)
+
+
+def test_generator_ea1_with_seqdist_method2():
+    do_test_generator_ea(2, '2', 'ea1', 1e-7)
+
+
+def test_generator_ea1_with_seqdist_method3():
+    do_test_generator_ea(3, '3', 'ea1', 1)
 
 
 def test_distribution():

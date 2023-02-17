@@ -60,6 +60,31 @@ def run_es_distr():
     alg(f, pop)
 
 
+def run_local_search():
+    inst = utils.create_instrument()
+    M = 640  # number of filters in the sequeance of filters
+    R = 32  # reduced dimensionality
+
+    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
+    distribution = algorithms.Uniform()
+    max_dist = 0.001
+    initial_design = utils.read_selection('ls-imporoved')
+
+    f = utils.ObjFunctionAverageSquare(inst, constants)
+    f = utils.add_logger(f, M, 'experiments-ls', 'sa',
+                         f'Local Search using permutation sequence distances based on method 2. {R} segments are used. For generation of the solution in the neighbourhood generatorEA is used. This distance is drawn from the {distribution.__class__.__name__} distribution with max_dist {max_dist}.')
+    f = utils.add_segm_dim_reduction(f, M, R)
+    dim_reduction = utils.SegmentsDimReduction(M, R)
+    reduced_initial_design = dim_reduction.to_reduced(initial_design)
+
+    alg = algorithms.PhLocalSearch(1000, generator, max_dist, distribution)
+    utils.logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent', 'hamming_distance_from_parent'])
+
+    alg(f, reduced_initial_design)
+
+
 def run_sa():
     inst = utils.create_instrument()
     M = 640  # number of filters in the sequeance of filters
@@ -78,7 +103,7 @@ def run_sa():
     alg = algorithms.FiltersPhenoSimulatedAnnealing(100, 0, 0.99, generator, 0.000001)
     utils.logger.watch(alg, ['temperature', 'current_solution_quality', 'last_update_prob'])
     utils.logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
-    pop = utils.read_selection('designs/dTmp')
+    pop = utils.read_selection('designs/best-design-by-27-01')
     dim_reduction = utils.SegmentsDimReduction(M, R)
     reduced_pop = dim_reduction.to_reduced(pop)
 
@@ -132,9 +157,9 @@ def run_mies():
 
 
 def main():
-    run_sa()
     import os, psutil
     process = psutil.Process(os.getpid())
+    run_local_search()
     print(process.memory_info().rss / 1024 / 1024, 'MB')
 
 

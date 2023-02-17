@@ -242,7 +242,7 @@ class InstrumentSimulator():
         filterset1_idx : list(int)
             List of indexes for filterset 2.
         method : int
-            Method index. Should be 1 or 2.
+            Method index. Should be 2 or 3.
 
         Returns
         -------
@@ -256,7 +256,7 @@ class InstrumentSimulator():
         assert len(filterset2_idx) == self.instrumentsettings.detector.npxl_alt,\
             f'Selection filterset 2 incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
 
-        if method == 1:
+        if method == 2:
             transmissionmatrix_1 = self.getTransmissionMatrix(filterset1_idx)
             transmissionmatrix_2 = self.getTransmissionMatrix(filterset2_idx)
 
@@ -272,7 +272,7 @@ class InstrumentSimulator():
 
             distance = np.abs(signal_var_1 - signal_var_2)
 
-        elif method == 2:
+        elif method == 3:
             transmissionmatrix_1 = self.getTransmissionMatrix(filterset1_idx)
             transmissionmatrix_2 = self.getTransmissionMatrix(filterset2_idx)
             wavelength_fft = np.fft.rfftfreq(self.wavelength_n, 1)
