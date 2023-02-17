@@ -5,27 +5,31 @@ import utils
 import algorithms
 
 
+def get_constants():
+    return utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+
+
 def run_es():
     inst = utils.create_instrument()
     M = 640  # number of filters in the sequeance of filters
     R = 16  # reduced dimensionality
-    # mu_, lambda_ = 15, 30
-    mu_, lambda_ = 5, 5
+    mu_, lambda_ = 15, 30
+    # mu_, lambda_ = 5, 5
     lib_size = inst.filterlibrarysize
 
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
 
     mutation_distance = 0.01
-    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
-    # generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 2)
+    # generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
+    generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 2)
 
     f = utils.ObjFunctionAverageSquare(inst, constants)
-    f = utils.add_logger(f, M, 'experiments-myes-generatorEA', 'myes',
-                         f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to {mutation_distance:.5f} from the parent. Objective function is defined on {R} segments',
-                         generator)
-    # f = utils.add_logger(f, M, 'experiments-myes-generator2', 'myes',
-    #                      f'({mu_}+{lambda_}) es with generator EA',
+    # f = utils.add_logger(f, M, 'experiments-myes-generatorEA', 'myes',
+    #                      f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to {mutation_distance:.5f} from the parent. Objective function is defined on {R} segments',
     #                      generator)
+    f = utils.add_logger(f, M, 'experiments-myes-generator2', 'myes',
+                         f'({mu_}+{lambda_}) es with generator g2',
+                         generator)
     f = utils.add_segm_dim_reduction(f, M, R)
 
     alg = algorithms.MyES(None, M, 20000, mu_, lambda_, mutation_distance, generator)
@@ -38,11 +42,11 @@ def run_es_distr():
     inst = utils.create_instrument()
     M = 640  # number of filters in the sequeance of filters
     R = 16  # reduced dimensionality
-    # mu_, lambda_ = 15, 30
-    mu_, lambda_ = 5, 5
+    mu_, lambda_ = 15, 30
+    # mu_, lambda_ = 5, 5
     lib_size = inst.filterlibrarysize
 
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
 
     mutation_distance = 0.01
     distr = algorithms.Exponential()
@@ -50,11 +54,42 @@ def run_es_distr():
 
     f = utils.ObjFunctionAverageSquare(inst, constants)
     f = utils.add_logger(f, M, 'experiments-myes-generatorEA', 'myes',
-                         f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to the given distance from the parent. This distance is drawn from the {distr.__class__.__name__} distribution with max_dist choosen uniformly at random from 0, to 0.01. Objective function is defined on {R} segments',
+                         f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to the given distance from the parent. Sequence distance is obtained using method kirill. This distance is drawn from the {distr.__class__.__name__} distribution with max_dist choosen uniformly at random from 0, to 0.01. Objective function is defined on {R} segments. SRON constants are: nCH4={constants.nCH4}, sza={constants.sza}, albedo={constants.albedo}',
                          generator)
     f = utils.add_segm_dim_reduction(f, M, R)
 
     alg = algorithms.MyESFixedDistDistribution(None, M, 20000, mu_, lambda_, mutation_distance, generator, distr)
+    pop = [np.random.randint(0, lib_size, R) for _ in range(mu_)]
+
+    alg(f, pop)
+
+
+def run_es_new_dist_distr():
+    inst = utils.create_instrument()
+    M = 640  # number of filters in the sequeance of filters
+    R = 16  # reduced dimensionality
+    mu_, lambda_ = 15, 30
+    # mu_, lambda_ = 5, 5
+    lib_size = inst.filterlibrarysize
+
+    constants = get_constants()
+
+    distr = algorithms.Uniform()
+    # mutation_distance = 15.
+    # d0_method = 3
+    # d1_method = '3'
+    mutation_distance = 0.8e-6
+    d0_method = 2
+    d1_method = '2'
+    generator = algorithms.create_offspring_generator(inst, d0_method, d1_method, 'ea1', budget=1000, M=M, R=R)
+
+    f = utils.ObjFunctionAverageSquare(inst, constants)
+    f = utils.add_logger(f, M, 'experiments-myes-generatorEA-new-dists', 'myes',
+                         f'({mu_}+{lambda_}) es with generator EA. This generator uses (1+5) EA with harmonic mutations of 1 filter to generate offspring distante to the given distance from the parent. Distance between filters is computed using {d0_method}. Distance between sequences is computed using method {d1_method}. This distance is drawn from the {distr.__class__.__name__} distribution with max_dist choosen uniformly at random from 0, to {mutation_distance:.10f}. Objective function is defined on {R} segments. SRON constants are: nCH4={constants.nCH4}, sza={constants.sza}, albedo={constants.albedo}')
+    f = utils.add_segm_dim_reduction(f, M, R)
+    utils.logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent', 'hamming_distance_from_parent'])
+
+    alg = algorithms.MyESFixedDistDistribution(None, M, 10000, mu_, lambda_, mutation_distance, generator, distr)
     pop = [np.random.randint(0, lib_size, R) for _ in range(mu_)]
 
     alg(f, pop)
@@ -65,7 +100,7 @@ def run_local_search():
     M = 640  # number of filters in the sequeance of filters
     R = 32  # reduced dimensionality
 
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
 
     generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
     distribution = algorithms.Uniform()
@@ -91,7 +126,7 @@ def run_sa():
     R = 16  # reduced dimensionality
     lib_size = inst.filterlibrarysize
 
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
 
     generator = algorithms.create_offspring_generator(inst, 2, 'kirill', 'ea', budget=1000)
 
@@ -112,7 +147,7 @@ def run_sa():
 
 def run_rls():
     inst = utils.create_instrument()
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
     M, L = 640, inst.filterlibrarysize
     f = utils.ObjFunctionAverageSquare(inst, constants)
     f = utils.add_logger(f, M, 'experiments-rls', 'rls', 'rls in subspaces of the same filters')
@@ -124,7 +159,7 @@ def run_rls():
 
 def run_ea():
     inst = utils.create_instrument()
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
     M, L = 640, inst.filterlibrarysize
     f = utils.ObjFunctionAverageSquare(inst, constants)
     f = utils.add_logger(f, M, 'experiments-ea', 'ea', '(1+1) EA')
@@ -136,7 +171,7 @@ def run_ea():
 
 def run_bo():
     inst = utils.create_instrument()
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
     M, L = 640, inst.filterlibrarysize
     f = utils.ObjFunctionAverageSquare(inst, constants)
     f = utils.add_logger(f, M, 'experiments-bo', 'bo', 'bo')
@@ -147,7 +182,7 @@ def run_bo():
 
 def run_mies():
     inst = utils.create_instrument()
-    constants = utils.SRONConstants(nCH4=1500, albedo=0.15, sza=70)
+    constants = get_constants()
     M, L = 640, inst.filterlibrarysize
     f = utils.ObjFunctionAverageSquare(inst, constants)
     f = utils.add_logger(f, M, 'experiments-mies', 'mies', 'mies')
@@ -159,7 +194,7 @@ def run_mies():
 def main():
     import os, psutil
     process = psutil.Process(os.getpid())
-    run_local_search()
+    run_es_new_dist_distr()
     print(process.memory_info().rss / 1024 / 1024, 'MB')
 
 
