@@ -315,7 +315,8 @@ def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, gener
     logger = mylogger.MyLogger(root=root_name,
                                folder_name="everyeval",
                                algorithm_name=alg_name,
-                               algorithm_info=alg_info)
+                               algorithm_info=alg_info,
+                               isLogArg=True)
     logger_best = mylogger.MyLogger(root=root_name,
                                     folder_name="bestsofar",
                                     algorithm_name=alg_name,
