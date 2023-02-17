@@ -273,6 +273,7 @@ class MyES(AbstractES):
 
     def __init__(self, genotype_space, dim, budget, mu_, lambda_, initial_distance, generator):
         super().__init__(genotype_space, dim, budget, mu_, lambda_)
+        self.initial_distance = initial_distance
         self.d = initial_distance
         self.generator = generator
 
@@ -349,10 +350,10 @@ class MyESFixedDistDistribution(MyES):
         super().__init__(genotype_space, dim, budget, mu_, lambda_, initial_distance, generator)
         self.distribution = distribution
         self.min_dist = 0.
-        self.max_dist = 0.1
+        self.max_dist = None
 
     def mutation(self, ind):
-        self.max_dist = np.random.uniform(0, 0.01)
+        self.max_dist = np.random.uniform(0, self.initial_distance)
         self.d = self.distribution.sample(self.min_dist, self.max_dist)
         return super().mutation(ind)
 
