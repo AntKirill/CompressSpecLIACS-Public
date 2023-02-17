@@ -123,7 +123,7 @@ def structural_changes(bestsofarfile):
             data.append(MyEval(int(row[0]), float(row[1]), float(row[2]), float(row[3]), [int(i) for i in row[4:]]))
 
     d0 = utils.FilterDistanceFactory(inst).create_precomputed_filters_distance(2, 'precomputedFiltersDists/method2.txt')
-    d1 = utils.SequenceDistanceFactory(d0).create_sequence_distance('kirill')
+    d1 = utils.SequenceDistanceFactory(d0=d0, instrument=inst, M=640, R=640).create_sequence_distance('kirill')
     dists = np.zeros(len(data) - 1)
     for i in range(1, len(data)):
         dists[i-1] = d1(data[0].design, data[i].design)
