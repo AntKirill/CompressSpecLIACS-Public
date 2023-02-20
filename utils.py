@@ -1,3 +1,4 @@
+import datetime
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -15,6 +16,11 @@ import mylogger
 def read_selection(file_name):
     with open(file_name, 'r') as f:
         return list(map(int, f.read().split()))
+
+
+def now_date_time_str():
+    now = datetime.datetime.now()
+    return now.strftime('%d-%m-%Y_%Hh%Mm%Ss')
 
 
 def create_instrument():
