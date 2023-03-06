@@ -9,7 +9,7 @@ date: 11-11-2022
 
 import numpy as np
 from dataclasses import dataclass
-from RadianceModel import RadianceModel
+from radiancemodel import RadianceModel
 import os
 import csv
 from scipy import optimize
@@ -20,25 +20,72 @@ module_directory = os.path.dirname(os.path.abspath(__file__))
 
 @dataclass
 class Detector:
+
+    detectortype: str = 'LynredSNAKE'
     pxlsize: float = 15e-6
-    npxl_alt: int = 640
-    npxl_act: int = 512
-    readnoise: float = 50
-    darkcurrent: float = 2000
+    npxl_ALT: int = 640
+    npxl_ACT: int = 512
+    readnoise: float = 98
+    darkcurrent: float = 30000
     quantumeff: float = 0.85
-    fullwellcapicity: float = 450e4
+    fullwellcapacity: float = 110e3
+    t_dead: float = 3.3e-3  # s, max. readout frequency 300 Hz
+
+    def __init__(self, detectortype=None):
+        if detectortype == 'Chroma-D':
+            self.pxlsize: float = 18e-6
+            self.npxl_ALT: int = 2048
+            self.npxl_ACT: int = 2048
+            self.readnoise: float = 300
+            self.darkcurrent: float = 100
+            self.quantumeff: float = 0.7
+            self.fullwellcapacity: float = 2.7e6
+            self.t_dead: float = 0
+            self.detectortype = detectortype
+
+        if detectortype == 'LynredSNAKElowgain':
+            self.detectortype = detectortype
+            self.pxlsize: float = 15e-6
+            self.npxl_ALT: int = 640
+            self.npxl_ACT: int = 512
+            self.readnoise: float = 300
+            self.darkcurrent: float = 30000
+            self.quantumeff: float = 0.85
+            self.fullwellcapacity: float = 1.44e6
+            self.t_dead: 0
 
 
 @dataclass
 class InstrumentSettings:
-    resolution: float = 150
-    oversampling: float = 2.5
-    aperture_act: float = 30e-3
-    aperture_alt: float = 30e-3
+    gre_ACT: float = 300
+    gre_ALT: float = 300
+    giFOV_ALT: float = 150
+    giFOV_ACT: float = 300
+    spat_sampling_ACT: float = 5          # resolution / projected binned pixelsize
+    spat_sampling_ALT: float = 3          # resolution / projected binned pixelsize
+    temp_sampling: float = 3
+    aperture_ACT: float = 18e-3
+    aperture_ALT: float = 18e-3
     sza: float = 70
     vza: float = 0
+    lgf_sigma = 5
     detector = Detector()
-    spatialbinning: int = 5
+
+    def __init__(self, detectortype=None, librarytype='planewave'):
+        assert librarytype in ['planewave', 'gaussian', 'LGF']
+
+        self.librarytype = librarytype
+
+        if detectortype == 'Chroma-D':
+            self.detector = Detector(detectortype)
+            self.temp_sampling = 2
+            self.aperture_ACT = 60e-3
+            self.aperture_ALT = 60e-3
+        if detectortype == 'LynredSNAKElowgain':
+            self.detector = Detector(detectortype)
+            self.temp_sampling = 1
+            self.aperture_ACT = 24e-3
+            self.aperture_ALT = 24e-3
 
 
 class InstrumentSimulator():
@@ -56,29 +103,30 @@ class InstrumentSimulator():
     def __init__(self, instrumentsettings):
 
         self.instrumentsettings = instrumentsettings
-        # Ground-projected instantaneous field-of-view
-        self.giFOV = self.instrumentsettings.resolution / \
-            self.instrumentsettings.oversampling
-        # swath ACT in m
-        self.swath_act = self.giFOV * self.instrumentsettings.detector.npxl_act
-        # swath ALT in m
-        self.swath_alt = self.giFOV * self.instrumentsettings.detector.npxl_alt
 
-        self.focallength = self.altitude / self.giFOV * \
+        self.spatial_sampling_distance_ALT = self.instrumentsettings.giFOV_ALT / self.instrumentsettings.spat_sampling_ALT      # swath ACT in m
+        self.spatial_sampling_distance_ACT = self.instrumentsettings.giFOV_ACT / self.instrumentsettings.spat_sampling_ACT      # swath ACT in m
+
+        self.swath_ACT = self.spatial_sampling_distance_ACT * self.instrumentsettings.detector.npxl_ACT   # swath ALT in m
+        self.swath_ALT = self.spatial_sampling_distance_ALT * self.instrumentsettings.detector.npxl_ALT
+
+        self.focallength_ALT = self.altitude / self.instrumentsettings.giFOV_ALT * \
             self.instrumentsettings.detector.pxlsize             # in m
-        self.fnumber_alt = self.focallength / self.instrumentsettings.aperture_alt
-        self.fnumber_act = self.focallength / self.instrumentsettings.aperture_act
-        self.etendue = self.instrumentsettings.aperture_alt * \
-            self.instrumentsettings.aperture_act * \
-            self.giFOV**2 / self.altitude**2  # in sr m2
+        self.focallength_ACT = self.altitude / self.instrumentsettings.giFOV_ACT * \
+            self.instrumentsettings.detector.pxlsize             # in m
+        self.fnumber_ALT = self.focallength_ALT / self.instrumentsettings.aperture_ALT
+        self.fnumber_ACT = self.focallength_ACT / self.instrumentsettings.aperture_ACT
+        self.etendue = self.instrumentsettings.aperture_ALT * self.instrumentsettings.aperture_ACT * \
+            self.spatial_sampling_distance_ALT * self.spatial_sampling_distance_ACT / self.altitude**2  # in sr m2
+        self.t_smear = (self.instrumentsettings.gre_ALT - self.instrumentsettings.giFOV_ALT) / self.projected_orbital_speed  # in seconds
+        self.integrationtime = self.t_smear / self.instrumentsettings.temp_sampling - self.instrumentsettings.detector.t_dead
+        self.readout_frequentie = 1 / (self.integrationtime + self.instrumentsettings.detector.t_dead)
 
-        self.integrationtime = self.giFOV / \
-            self.projected_orbital_speed                              # in seconds
-        # in Hz
-        self.readoutfreq = 1 / self.integrationtime
+        self.coadd_factor = self.instrumentsettings.temp_sampling * self.instrumentsettings.spat_sampling_ACT * \
+            self.instrumentsettings.spat_sampling_ALT
 
-        self.loadFilterLibrary()
         self.loadRadianceModel()
+        self.loadFilterLibrary()
 
     def loadOldOptimizedFilterset(self):
         """
@@ -151,49 +199,68 @@ class InstrumentSimulator():
 
         """
 
-        shapes = ['circle', 'cross', 'cross-hw',
-                  'octagon', 'square', 'square-bcc']
+        if self.instrumentsettings.librarytype == 'planewave':
+            shapes = ['circle', 'cross', 'cross-hw',
+                      'octagon', 'square', 'square-bcc']
 
-        print('Loading filter library...')
-        wavelength = np.zeros(1)
-        self.structlabels = []
-        self.filterlibrary = np.array([])
-        for shape in shapes:
-            filename = os.path.join(
-                module_directory, f'FilterLibrary/FilterLibrary_{shape}_11-08-2022.txt')
-            with open(filename, newline='') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',')
-                for rowindex, row in enumerate(reader):
-                    if rowindex == 0:
-                        wavelength = np.float_(row[1:])
-                        transmissionprofiles = np.zeros((1, len(wavelength)))
-                    elif rowindex == 1:
-                        self.structlabels.append(f'{shape}, {row[0]}')
-                        transmissionprofiles = np.float_(row[2:])
-                    else:
-                        if np.sum((np.float_(row[2:])) < 1.1) == len(wavelength) and np.sum((np.float_(row[2:])) > -0.0) == len(wavelength):
-                            self.structlabels.append(f'{shape}, {row[0]}')
-                            transmissionprofiles = np.vstack(
-                                (transmissionprofiles, np.float_(row[2:])))
+            print('Loading filter library...')
+            wavelength = np.zeros(1)
+            self.structlabels = []
+            self.filterlibrary = np.array([])
+            for shape in shapes:
+                filename = os.path.join(
+                    module_directory, f'FilterLibrary/FilterLibrary_{shape}_11-08-2022.txt')
+                with open(filename, newline='') as csvfile:
+                    reader = csv.reader(csvfile, delimiter=',')
+                    for rowindex, row in enumerate(reader):
+                        if rowindex == 0:
+                            wavelength = np.float_(row[1:])
+                            transmissionprofiles = np.zeros((1, len(wavelength)))
+                        elif rowindex == 1:
+                            self.structlabels.append({'shape': shape,
+                                                      'lattice_constant': float(row[0].split('|')[0][1:]),
+                                                      'width': float(row[0].split('|')[1][:-1])})
+                            transmissionprofiles = np.float_(row[2:])
+                        else:
+                            if np.sum((np.float_(row[2:])) < 1.1) == len(wavelength) and np.sum((np.float_(row[2:])) > -0.0) == len(wavelength):
+                                self.structlabels.append({'shape': shape,
+                                                          'lattice_constant': float(row[0].split('|')[0][1:]),
+                                                          'width': float(row[0].split('|')[1][:-1])})
+                                transmissionprofiles = np.vstack(
+                                    (transmissionprofiles, np.float_(row[2:])))
 
-            if self.filterlibrary.size == 0:
-                self.filterlibrary = transmissionprofiles
-            else:
-                self.filterlibrary = np.vstack(
-                    (self.filterlibrary, transmissionprofiles))
+                if self.filterlibrary.size == 0:
+                    self.filterlibrary = transmissionprofiles
+                else:
+                    self.filterlibrary = np.vstack(
+                        (self.filterlibrary, transmissionprofiles))
 
-        # remove wavelengths larger than 1670 nm
-        mask = self.wavelength_min <= wavelength * 1e9
-        mask = np.logical_and(mask, wavelength * 1e9 < self.wavelength_max)
-        self.filterlibrary = np.delete(self.filterlibrary, ~mask, axis=1)
+            # remove wavelengths larger than 1670 nm
+            mask = self.wavelength_min <= wavelength * 1e9
+            mask = np.logical_and(mask, wavelength * 1e9 < self.wavelength_max)
+            self.filterlibrary = np.delete(self.filterlibrary, ~mask, axis=1)
 
-        # remove filters with 'ringing' simulation artefact
-        lib_fft = np.abs(np.fft.rfft(self.filterlibrary, axis=1))
-        mask = lib_fft[:, 21] > 3
-        self.filterlibrary = np.delete(self.filterlibrary, mask, axis=0)
-        self.structlabels = np.delete(self.structlabels, mask, axis=0)
+            # remove filters with 'ringing' simulation artefact
+            lib_fft = np.abs(np.fft.rfft(self.filterlibrary, axis=1))
+            mask = lib_fft[:, 21] > 3
+            self.filterlibrary = np.delete(self.filterlibrary, mask, axis=0)
+            self.structlabels = np.delete(self.structlabels, mask, axis=0)
 
-        self.filterlibrarysize = self.filterlibrary.shape[0]
+            self.filterlibrarysize = self.filterlibrary.shape[0]
+
+        elif self.instrumentsettings.librarytype == 'gaussian':
+            return
+
+        elif self.instrumentsettings.librarytype == 'LGF':
+            self.filterlibrarysize = self.instrumentsettings.detector.npxl_ALT
+
+            centerwavelength_range = np.linspace(1625, 1670, self.filterlibrarysize)
+            _, spectral_range = self.getRadiance(2000, 0.4)
+            self.filterlibrary = np.zeros((self.filterlibrarysize, len(spectral_range)))
+
+            for i in range(self.filterlibrarysize):
+                centerwavelength = centerwavelength_range[i]
+                self.filterlibrary[i, :] = np.exp(-((spectral_range-centerwavelength)**2) / self.instrumentsettings.lgf_sigma**2)
 
     def loadRadianceModel(self):
         """
@@ -209,6 +276,43 @@ class InstrumentSimulator():
                                            lambda_max=1670,
                                            lambda_n=225)
 
+    def getfilterset(self, method='Ranked2ndFFT'):
+
+        assert method in ['ranked2ndFFT', 'EA', 'decorrelation'], 'Method should be "ranked2ndFFT" or "EA"'
+
+        if method == 'ranked2ndFFT':
+            selection = self.filterguess()
+
+        elif method == 'EA':
+            selection = np.repeat(np.array([60, 60, 60, 60, 158, 729, 797, 1541, 2139, 2169, 2917, 2966,
+                                  2968, 2996, 3022, 3173]), int(self.instrumentsettings.detector.npxl_ALT / 16))
+            # selection = np.repeat(np.array([1651, 446, 3187, 93, 595, 2642, 2966, 2943, 2990, 2966, 2966, 3890,
+            #                                 3982, 2917, 3890, 2254]), int(self.instrumentsettings.detector.npxl_ALT / 16))
+        elif method == 'decorrelation':
+
+            print('Decorrelating filter library...')
+            correlationmatrix = np.corrcoef(self.filterlibrary, rowvar=True)
+
+            if self.instrumentsettings.detector.npxl_ALT == 640:
+                nfilters = 160
+            else:
+                nfilters = 128
+
+            correlationmatrix_filtered = np.copy(correlationmatrix)**2
+            selectedfilter_ids = np.arange(0, self.filterlibrarysize)
+
+            for i in range(self.filterlibrarysize - nfilters):
+                if i % 50 == 0:
+                    print(f'{i} filters removed')
+                ind_min = np.argmax(np.sum(correlationmatrix_filtered, axis=1))
+                correlationmatrix_filtered = np.delete(correlationmatrix_filtered, ind_min, axis=0)
+                correlationmatrix_filtered = np.delete(correlationmatrix_filtered, ind_min, axis=1)
+                selectedfilter_ids = np.delete(selectedfilter_ids, ind_min)
+
+            selection = np.repeat(selectedfilter_ids, int(self.instrumentsettings.detector.npxl_ALT / nfilters))
+
+        return selection
+
     def filterguess(self):
         """
         Initial guess of a filter set, based on the second moment of the FT of
@@ -220,12 +324,18 @@ class InstrumentSimulator():
             list of the indexes of the selected filters
 
         """
-        nfilters = 160
+
+        # Option 1
+        if self.instrumentsettings.detector.npxl_ALT == 640:
+            nfilters = 160
+        else:
+            nfilters = 128
+
         Tfft = np.fft.rfft(self.filterlibrary, axis=1)
         wavelength_fft = np.fft.rfftfreq(self.wavelength_n, 1)
         Tfft_width = np.sum(np.abs(Tfft)**2 * (wavelength_fft[None, :]/1e9)**2, axis=1)
         selection = np.argpartition(Tfft_width, -nfilters)[-nfilters:]
-        selection = np.repeat(selection, 4)
+        selection = np.repeat(selection, int(self.instrumentsettings.detector.npxl_ALT / nfilters))
 
         return selection
 
@@ -317,9 +427,9 @@ class InstrumentSimulator():
 
         if method == 1:
             # Get filters
-            filter1 = instrument.filterlibrary[filter_index1, :]
+            filter1 = self.filterlibrary[filter_index1, :]
             filter1 = filter1 / np.sum(filter1)
-            filter2 = instrument.filterlibrary[filter_index2, :]
+            filter2 = self.filterlibrary[filter_index2, :]
             filter2 = filter2 / np.sum(filter2)
 
             # Compute cross correlation
@@ -381,13 +491,36 @@ class InstrumentSimulator():
             The transmission matrix.
 
         """
-        assert len(selection) == self.instrumentsettings.detector.npxl_alt,\
-            f'Selection incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
+        assert len(selection) == self.instrumentsettings.detector.npxl_ALT,\
+            f'Selection incorrect size: should be of length {self.instrumentsettings.detector.npxl_ALT}'
         transmissionmatrix = self.filterlibrary[selection, :]
 
         return transmissionmatrix
 
-    def simulateMeasurement(self, selection, nCH4=1500, albedo=0.15, sza=10, noise=True, n=100, verbose=False):
+    def getRadiance(self, nCH4, albedo):
+        """
+        generate a radiance spectrum for the input  CH4 concentration and albedo
+
+        Parameters
+        ----------
+        nCH4 : float
+            Methane concentration in ppb.
+        albedo : float
+            albedo, sould be between 0 and 1.
+
+        Returns
+        -------
+        radiance : np.array
+            the radiance in photons /
+
+        """
+
+        radiance, spectral_range = self.radiancemodel.getRadiance(
+            nCH4, albedo, sza=self.instrumentsettings.sza, vza=self.instrumentsettings.vza, normalizedCH4=False)
+
+        return radiance, spectral_range
+
+    def simulateMeasurement(self, selection, nCH4=2000, albedo=0.15, sza=10, noise=True, n=100, extended=False, verbose=False):
         """
         Simulates a series of measurements for the given condition.
 
@@ -417,19 +550,20 @@ class InstrumentSimulator():
             The relative bias in the estimated methane concentration.
 
         """
-
+        xCH4 = nCH4 / self.radiancemodel.nCH4norm
         self.instrumentsettings.sza = sza
 
         self.transmissionmatrix = self.getTransmissionMatrix(selection)
-        radiance, spectral_range = self.radiancemodel.getRadiance(nCH4, albedo,
-                                                                  self.instrumentsettings.sza,
-                                                                  self.instrumentsettings.vza)
-        self.radiance = radiance
-        self.spectral_range = spectral_range
+        self.radiance, self.spectral_range = self.radiancemodel.getRadiance(xCH4, albedo,
+                                                                            self.instrumentsettings.sza,
+                                                                            self.instrumentsettings.vza)
 
-        self.signal = self._getSignal(nCH4, albedo) * self.instrumentsettings.spatialbinning
+        self.signal = self._getSignal(xCH4, albedo)
 
-        self.noise = np.sqrt(self.instrumentsettings.spatialbinning*(self.signal + self.instrumentsettings.detector.readnoise**2 +
+        if np.any((self.signal / self.coadd_factor) > self.instrumentsettings.detector.fullwellcapacity):
+            print('Full well capacity exceeded')
+
+        self.noise = np.sqrt(self.signal + self.coadd_factor*(self.instrumentsettings.detector.readnoise**2 +
                              self.instrumentsettings.detector.darkcurrent * self.integrationtime))
         self.meanSNR = np.mean(self.signal / self.noise)
 
@@ -439,11 +573,11 @@ class InstrumentSimulator():
                     f'Fitting {n} noisy relalizations with nCH4: {nCH4}, albedo: {albedo} and SNR: {self.meanSNR:.1f}')
                 starttime = time.perf_counter()
 
-            self.signal_noisy = self.signal[:, None] + \
-                self.noise[:, None] * np.random.randn(len(self.signal), n)
+            self.signal_noisy = self.signal[:, None] + self.noise[:, None] * np.random.randn(len(self.signal), n)
             nCH4_fit = np.zeros(n)
             for i in range(n):
-                nCH4_fit[i] = self._fitMethane(self.signal_noisy[:, i])
+                fit_params = self._fitMethane(self.signal_noisy[:, i], extended=extended)
+                nCH4_fit[i] = fit_params[0] * self.radiancemodel.nCH4norm
             relative_fitprecision = np.std(nCH4_fit) / nCH4
             relative_fitbias = (nCH4 - np.nanmean(nCH4_fit)) / nCH4
 
@@ -455,13 +589,14 @@ class InstrumentSimulator():
                     f'Fitted methane: {np.nanmean(nCH4_fit):.1f} ppb +- {np.std(nCH4_fit):.1f} ({relative_fitprecision*1e2:.1f} %), groundtruth: {nCH4:.1f} ppb')
 
         else:
-            nCH4_fit = self._fitMethane(self.signal)
+            fit_params = self._fitMethane(self.signal)
+            nCH4_fit = fit_params[0] * self.radiancemodel.nCH4norm
             relative_fitbias = np.abs(nCH4 - nCH4_fit) / nCH4
             relative_fitprecision = 0
 
         return relative_fitprecision, relative_fitbias
 
-    def _getSignal(self, nCH4, albedo):
+    def _getSignal(self, xCH4, albedo, xH2O=1, xCO2=1, xN2O=1, xCO=1):
         """
         Generates a camera signal
 
@@ -478,13 +613,15 @@ class InstrumentSimulator():
             Signal intensity as measured by the camera.
 
         """
-        radiance, spectral_range = self.radiancemodel.getRadiance(nCH4, albedo, sza=self.instrumentsettings.sza,
+        radiance, spectral_range = self.radiancemodel.getRadiance(xCH4, albedo, xH2O=xH2O, xCO2=xCO2, xN2O=xN2O, xCO=xCO2, sza=self.instrumentsettings.sza,
                                                                   vza=self.instrumentsettings.vza)
+        # self.radiance = np.ones(225) * 3.4e16 * albedo
         signal = np.dot(self.transmissionmatrix, radiance) \
             * self.instrumentsettings.detector.quantumeff \
             * self.integrationtime * self.etendue \
             * (spectral_range[-1] - spectral_range[0]) \
-            / len(spectral_range)
+            / len(spectral_range) * self.coadd_factor
+
         return signal
 
     def _getFiterror(self, params, tmp, signal_noisy):
@@ -506,11 +643,17 @@ class InstrumentSimulator():
             fit error between the estimated signal and the noise corrupted signal.
 
         """
-        nCH4, albedo = params
-        signalfit = self._getSignal(nCH4, albedo)
+        if len(params) > 2:
+            # xCH4, albedo, xH2O, xCO2, xN2O, xCO = params
+            xCH4, albedo, xH2O, xCO2 = params
+            signalfit = self._getSignal(xCH4, albedo, xH2O, xCO2)  # , xN2O, xCO)
+        else:
+            xCH4, albedo = params
+            signalfit = self._getSignal(xCH4, albedo)
+
         return signalfit - signal_noisy
 
-    def _fitMethane(self, signal_noisy):
+    def _fitMethane(self, signal_noisy, extended=False):
         """
         Performs the methane fit.
 
@@ -525,17 +668,26 @@ class InstrumentSimulator():
             fitted methane concentration in ppb.
 
         """
-        p0 = [2000, 0.2]
-        fit = optimize.least_squares(
-            self._getFiterror, p0, args=([], signal_noisy))
+        if extended:
+            p0 = [1, 0.2, 1, 1]  # 1, 1]
+            bounds_low = [0.55, 0, 0, 0]  # , 0, 0]
+            bounds_high = [2, 2, 10, 10]  # , 10, 10]
 
-        return fit.x[0]
+        else:
+            p0 = [1, 0.2]  # , 1, 1, 1, 1]
+            bounds_low = [0.55, 0]  # , 0, 0, 0, 0]
+            bounds_high = [2, 2]  # , 10, 10, 10, 10]
+        fit = optimize.least_squares(
+            self._getFiterror, p0, bounds=(bounds_low, bounds_high), args=([], signal_noisy))
+
+        return fit.x
 
 
 # %%
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
+    # instrumentsettings = InstrumentSettings(librarytype = 'LGF')
     instrumentsettings = InstrumentSettings()
     instrument = InstrumentSimulator(instrumentsettings)
 
@@ -544,10 +696,12 @@ if __name__ == '__main__':
     # %%
     # Example of how to select filters
     # selection = np.random.randint(0,instrument.filterlibrarysize, size = 640)
-    selection = instrument.filterguess()
+    # selection = instrument.getfilterset('ranked2ndFFT')
+    selection = instrument.getfilterset('EA')
+    # selection = instrument.getfilterset('decorrelation')
 
-    # Methane concentration should be [1500,3000], typical: 1800
-    nCH4 = 1800
+    # Methane concentration should be [1500,3000], typical: 1895
+    nCH4 = 2000
 
     # low albedo is 0.15, high albedo is 0.7
     albedo = 0.15
@@ -559,42 +713,16 @@ if __name__ == '__main__':
     n = 1000
 
     # retrieve methane
+    extendedModel = True
     relative_fitprecision, relative_fitbias,  = instrument.simulateMeasurement(
-        selection, nCH4=nCH4, albedo=albedo, sza=sza, n=n, verbose=True)
-    print(
-        f'bias = {100*relative_fitbias:.1f}%, precision = {100*relative_fitprecision:.2f}%')
+        selection, nCH4=nCH4, albedo=albedo, sza=sza, n=n, extended=extendedModel, verbose=True)
+    print(f'bias = {100*relative_fitbias:.1f}%, precision = {100*relative_fitprecision:.2f}%')
 
+    # %%
     selectedfilters = instrument.getTransmissionMatrix(selection)
+
     fig = plt.figure(dpi=300)
     plt.plot(instrument.spectral_range, selectedfilters.T[:, ::4])
     plt.xlabel('wavelength (nm)')
     plt.ylabel('transmission')
     plt.title('Transmission profiles')
-
-    # %% creates distance matrix
-    N = 1000
-    distance = np.zeros((3, N, N))
-
-    for i in range(N):
-        ind1 = i
-        for j in np.arange(i+1, N):
-            ind2 = j
-            for method in [1, 2, 3]:
-                distance[method-1, i, j] = instrument.getDistanceFilter(ind1, ind2, method)
-
-    # %%
-    filter_index = 0
-    title = 'Inv peak cross correlation'
-    plt.figure(dpi=300)
-    plt.hist(distance[filter_index].flatten(), bins=100, range=[0, 3000])
-    plt.title(title)
-    plt.xlabel('metric')
-    plt.ylabel('number of relations between filters')
-
-    plt.figure(dpi=300)
-    plt.imshow(np.log(distance[filter_index]))
-    plt.colorbar()
-    plt.title(title + '(log)')
-
-    # %%
-    plt.plot(instrument.spectral_range, instrument.filterlibrary[163, :])

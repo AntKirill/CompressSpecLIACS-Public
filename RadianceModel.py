@@ -47,7 +47,7 @@ def f_young(za):
     return f
 
 
-def binning(x, y, xbin):
+def binning(x, y, xbin, norm=True):
     '''
     Bins a signal y, with sampling x in binnes defined by xbin.
     xbin defines the center positions of each bin.
@@ -98,12 +98,17 @@ def binning(x, y, xbin):
         else:
             rightoverlap = 0
 
-        ybin[i_bin] = binvalue / (len(indices_within_bin[0:-1]) + leftoverlap + rightoverlap)
+        if norm:
+            ybin[i_bin] = binvalue / (len(indices_within_bin[0:-1]) + leftoverlap + rightoverlap)
+        else:
+            ybin[i_bin] = binvalue
 
     return ybin
 
 
 class RadianceModel():
+
+    nCH4norm = 1895         # ppb
 
     # CONSTANTS
     h_bar = 6.626e-34       # m2 kg / s
@@ -138,6 +143,10 @@ class RadianceModel():
 
         self.nCH4_standard = self.data_abs[:, 8]  # column density of CH4 [cm-2]
         self.nCH4_standard = np.reshape(self.nCH4_standard, (self.data_abs[:, 3].shape[0], 1))
+
+        norm_nCH4_standard = np.sum(self.nCH4_standard) * self.M_d * self.g / (self.N_A*self.p_0) * 1e13
+
+        self.nCH4 = self.nCH4_standard * self.nCH4norm / norm_nCH4_standard
 
         #                          -- Interpolate irradiance --
         # Import and resample solar radiance
@@ -184,17 +193,15 @@ class RadianceModel():
             self.sigma[4, :, i] = binning(solar_irradiance_wavevector,
                                           np.flip(sigma_CH4_pl[:, i]), self.spectral_range)
 
-    def getRadiance(self, nCH4_ppb, albedo, sza=10, vza=0):
-        # Define input concentrtions for methane
-        norm_nCH4_standard = np.sum(self.nCH4_standard) * self.M_d * self.g / (self.N_A*self.p_0) * 1e13
-
-        self.nCH4 = nCH4_ppb * self.nCH4_standard / norm_nCH4_standard
+    def getRadiance(self, xCH4, albedo, xH2O=1, xCO2=1, xN2O=1, xCO=1, sza=10, vza=0, normalizedCH4=True):
+        if not normalizedCH4:
+            xCH4 = xCH4 / self.nCH4norm
 
         # Calculate vertival absorption
         nLayer = self.nCH4.shape[0]
-        tau_vert = self.sigma[0, :, :]@self.nH2O[0:nLayer, 0] + self.sigma[1, :, :]@self.nCO2[0:nLayer, 0]\
-            + self.sigma[2, :, :]@self.nN2O[0:nLayer, 0] + self.sigma[3, :, :]@self.nCO[0:nLayer, 0]\
-            + (self.sigma[4, :, :]@self.nCH4[0:nLayer, 0])
+        tau_vert = xH2O*self.sigma[0, :, :]@self.nH2O[0:nLayer, 0] + xCO2*self.sigma[1, :, :]@self.nCO2[0:nLayer, 0]\
+            + xN2O*self.sigma[2, :, :]@self.nN2O[0:nLayer, 0] + xCO*self.sigma[3, :, :]@self.nCO[0:nLayer, 0]\
+            + xCH4*(self.sigma[4, :, :]@self.nCH4[0:nLayer, 0])
 
         # Calculate radiance
         rair = f_young(sza) + f_young(vza)
@@ -210,14 +217,27 @@ if __name__ == "__main__":
 
     radiancemodel = RadianceModel()
     nCH4 = 2000
-    albedo = 0.75
-    sza = 10
-    spectrum, spectral_range = radiancemodel.getRadiance(nCH4, albedo, sza)
-    radiance = spectrum * 1.0e3 * radiancemodel.h_bar * radiancemodel.omega0
+    albedo = 0.15
+    sza = 70
+    radiance, spectral_range = radiancemodel.getRadiance(nCH4, albedo, sza=sza, normalizedCH4=False)
 
     plt.figure(dpi=300)
-    plt.plot(spectral_range, spectrum)
+    plt.plot(spectral_range, radiance)
     plt.ylabel("Radiance [ph/(s sr nm m2)]")
     plt.xlabel("Wavelength [nm]")
     plt.grid()
     plt.title(f'Methane: {nCH4} ppb ')
+
+    # %%
+    layer_height = np.cumsum(radiancemodel.data_abs[:, 0])
+    norm_nCH4_standard = np.sum(radiancemodel.nCH4_standard) * radiancemodel.M_d * \
+        radiancemodel.g / (radiancemodel.N_A*radiancemodel.p_0) * 1e13
+
+    plt.figure(dpi=300)
+    plt.plot(layer_height, radiancemodel.nCH4_standard, label='1652 ppb - US Standard Atmosphere 1976')
+    plt.plot(layer_height, radiancemodel.nCH4_standard * 2000 / norm_nCH4_standard, label='2000 ppb - scaled ')
+    plt.plot(layer_height, 24 * np.ones(24) * np.sum(radiancemodel.nCH4_standard) /
+             norm_nCH4_standard, label='old implementation')
+    plt.ylabel('column number density [cm-2]')
+    plt.xlabel('height [km]')
+    plt.legend()
