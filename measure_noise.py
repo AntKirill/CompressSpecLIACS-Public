@@ -20,7 +20,7 @@ class MeasurePrecision:
 
     def __get_precision_vals(self, selection):
         f = utils.ObjFunctionAverageSquare(self.instrument, self.constants, 1000)
-        N = 2
+        N = 5
         vals = np.zeros(N)
         for i in range(N):
             f(selection)
@@ -41,7 +41,7 @@ class MeasurePrecision:
     def process(self):
         selection = utils.read_selection(self.design_path)
         vals = self.__get_precision_vals(selection)
-        self.__build_boxplot(vals=vals)
+        # self.__build_boxplot(vals=vals)
 
 
 def main():

@@ -9,11 +9,12 @@ date: 11-11-2022
 
 import numpy as np
 from dataclasses import dataclass
-from radiancemodel import RadianceModel
 import os
 import csv
 from scipy import optimize
 import time
+
+from RadianceModel import RadianceModel
 
 module_directory = os.path.dirname(os.path.abspath(__file__))
 

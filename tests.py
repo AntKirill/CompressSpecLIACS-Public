@@ -254,7 +254,7 @@ def test_generator_ea1_with_seqdist_method2():
 
 
 def test_generator_ea1_with_seqdist_method3():
-    do_test_generator_ea(3, '3', 'ea1', 1)
+    do_test_generator_ea(3, '3', 'ea1', 0.1)
 
 
 def test_distribution():
