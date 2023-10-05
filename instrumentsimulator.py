@@ -362,9 +362,9 @@ class InstrumentSimulator():
 
         """
         assert method in [2, 3], 'Method should be in [2, 3]'
-        assert len(filterset1_idx) == self.instrumentsettings.detector.npxl_alt,\
+        assert len(filterset1_idx) == self.instrumentsettings.detector.npxl_ALT,\
             f'Selection filterset 1 incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
-        assert len(filterset2_idx) == self.instrumentsettings.detector.npxl_alt,\
+        assert len(filterset2_idx) == self.instrumentsettings.detector.npxl_ALT,\
             f'Selection filterset 2 incorrect size: should be of length {self.instrumentsettings.detector.npxl_alt}'
 
         if method == 2:
