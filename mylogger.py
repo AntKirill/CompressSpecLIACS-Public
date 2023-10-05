@@ -76,6 +76,11 @@ class MyLogger:
                                       {'instance': instance, 'evals': 0, 'best': {}}]})
         os.makedirs(os.path.dirname(self.log_file_full_path), exist_ok=True)
 
+
+    def log_config(self, config):
+       with open(f'{self.root}/config.json', 'w') as f:
+           f.write(config.to_json())
+
     def log_column_names(self):
         with open(self.log_file_full_path, 'w') as f:
             f.write('evaluations raw_y')
