@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 
-import utils
 import measure_noise
+import utils
+import seaborn as sns
 
 
 def read_vals(file_name):
@@ -463,11 +464,9 @@ def build_averaged_convergence1(nruns=100, budget=12000):
     return 'Success'
 
 
-def build_averaged_convergence2(nruns=100, budget=12000):
-    data_folders = ['results-20-02-23/seqdist-my/',
-                    'results-20-02-23/seqdist-2/',
-                    'results-20-02-23/seqdist-3/',
-                    'results-20-02-23/experiments-extreme']
+def build_averaged_convergence2(nruns=100, budget=3000):
+    data_folders = ['my-exp/merged/',
+                    'results-29-09-23/umda/']
     # data_folders = ['results-22-02-23/new-dims/mk_2_s4_20-02-2023_20h',
     # 'results-20-02-23/experiments-extreme',
     # 'results-22-02-23/new-dims/mk_2_s32_20-02-2023_20h',
@@ -477,16 +476,14 @@ def build_averaged_convergence2(nruns=100, budget=12000):
     # 'results-22-02-23/new-dims/m3_s4_20-02-2023_20h',
     # 'results-20-02-23/seqdist-3',
     # 'results-22-02-23/new-dims/m3_s32_20-02-2023_20h']
-    colors = mpl.cm.rainbow(np.linspace(0, 1, len(data_folders)))
+    colors = mpl.cm.jet(np.linspace(0, 1, len(data_folders)))
     # colors = ['red', 'blue', 'green', 'purple', 'orange', 'cyan']
     # names = ['$(15 + 30)$ PhEA, LAP dist, Uniform Mut, PermBased approx',
     # '$(15 + 30)$ PhEA, method 2 dist, Uniform Mut, Simple approx',
     # '$(15 + 30)$ PhEA, method 3 dist, Uniform Mut, Simple approx',
     # '$(30 + 30)$ PhEA, LAP dist, Uniform Mut, PermBased approx']
-    names = ['EA, $d_1$ with LAP(2), $R=16$, 5 runs',
-            'EA, $d_1$ with method 2, $R=16$, 5 runs',
-            'EA, $d_1$ with method 3, $R=16$, 2 runs',
-            'Modified EA, $d_1$ with LAP(2), $R=16$, 1 run']
+    names = ['EA, $R=16$',
+            'UMDA, $R=16$']
     # names = ['Modified EA, $d_1$ with LAP(2), $R = 4$, 3 runs',
              # 'Modified EA, $d_1$ with LAP(2), $R = 16$, 1 run',
              # 'Modified EA, $d_1$ with LAP(2), $R = 32$, 3 runs',
@@ -496,7 +493,7 @@ def build_averaged_convergence2(nruns=100, budget=12000):
              # 'Modified EA, $d_1$ with method 3, $R = 4$, 1 run',
              # 'EA, $d_1$ with method 3, $R = 16$, 2 runs ',
              # 'Modified EA, $d_1$ with method 3, $R = 32$, 3 runs']
-    pdf_name = 'averaged-convergence-new-dists.pdf'
+    pdf_name = 'averaged-convergence-06-10-23.pdf'
 
     nruns = int(nruns)
     budget = int(budget)
@@ -507,9 +504,9 @@ def build_averaged_convergence2(nruns=100, budget=12000):
     errs = []
     for data_folder in data_folders:
         x, y, err = process_data_folder(data_folder, nruns, budget)
-        x = x[100:]
-        y = y[100:]
-        err = err[100:]
+        x = x[0:]
+        y = y[0:]
+        err = err[0:]
         ys.append(y)
         errs.append(err)
 
@@ -536,7 +533,7 @@ def build_averaged_convergence2(nruns=100, budget=12000):
     ax.yaxis.get_minor_formatter().set_scientific(False)
     ax.yaxis.set_major_formatter(ticker.ScalarFormatter())
     ax.yaxis.get_major_formatter().set_scientific(False)
-    yticks = [1.6, 1.7, 1.9, 2.1, 2.4, 2.6, 2.9, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    yticks = [0.9, 1.1, 1.3, 1.4, 1.5, 1.6, 1.7, 1.9, 2.1, 2.4, 2.6, 2.9, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
     ax.yaxis.set_major_locator(ticker.FixedLocator(yticks))
     ax.yaxis.set_minor_locator(ticker.FixedLocator(yticks))
     plt.yticks(yticks, fontsize=8)
@@ -616,6 +613,31 @@ def compare_distances_in_designs(designs_folder):
             dists[i][j] = d1(selections[i], selections[j])
             dists[j][i] = dists[i][j]
         print(*dists[i], flush=True)
+
+
+def process_distr(distr_file):
+    dir_name = os.path.dirname(distr_file)
+    pdf_path = os.path.join(dir_name, 'umda_distr_pictures')
+    os.makedirs(pdf_path, exist_ok=True)
+    with open(distr_file, 'r') as f:
+        while True:
+            l = f.readline()
+            if not l:
+                break
+            gen = int(l.split(',')[0].split(' ')[1])
+            matrix = []
+            l = f.readline().strip()
+            while len(l) > 0:
+                vals = [float(v) for v in l.split(' ')]
+                matrix.append(vals)
+                l = f.readline().strip()
+            pmin = 1/len(matrix)/(len(matrix[0])-1)
+            pmax = 1 - pmin
+            sns.heatmap(np.array(matrix), vmin=pmin, vmax=pmax)
+            plt.savefig(f"{pdf_path}/umda-distr-{gen}.pdf")
+            plt.close()
+            print(gen)
+    return 'Success'
 
 
 if __name__ == '__main__':

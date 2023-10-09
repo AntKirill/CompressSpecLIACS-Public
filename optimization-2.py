@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import numpy as np
 import random
@@ -82,7 +83,15 @@ def generate_random_solution(seq_length, lib_size):
     return np.random.randint(0, lib_size, seq_length)
 
 
-def umda_Znk_minimization(sz, crd, mu_, lambda_, f, term):
+def log_distribution(p, gen_number):
+    with open(os.path.join(utils.logger.folder_name, 'umda_distr.txt'), 'a') as f:
+        print(f'Generation {gen_number}, sz x crd', file=f)
+        for i in range(len(p)):
+            print(*p[i], sep=' ', file=f)
+        print('', flush=True, file=f)
+
+
+def umda_Znk_minimization(sz, crd, mu_, lambda_, f, term, is_log_p=False):
     p = np.full((sz, crd), 1. / crd)
     lb = 1 / ((crd - 1) * sz)
     ub = 1. - lb
@@ -90,7 +99,10 @@ def umda_Znk_minimization(sz, crd, mu_, lambda_, f, term):
     spent_budget = 0
     best_fitness = float("inf")
     sol = None
+    gen_number = 1
     while True:
+        if is_log_p:
+            log_distribution(p, gen_number)
         if term(iteration, spent_budget, best_fitness):
             break
         pop = []
@@ -102,7 +114,7 @@ def umda_Znk_minimization(sz, crd, mu_, lambda_, f, term):
             spent_budget += 1
             pop.append(Individual(x, obj_value))
         pop.sort(key=lambda ind: ind.obj_value)
-        if (pop[0].obj_value < best_fitness):
+        if pop[0].obj_value < best_fitness:
             sol = pop[0]
             best_fitness = pop[0].obj_value
         # print(best_fitness)
@@ -112,6 +124,7 @@ def umda_Znk_minimization(sz, crd, mu_, lambda_, f, term):
                 cnt[pop[j].genotype[i]] += 1
             for j in range(crd):
                 p[i][j] = min(max(cnt[j] / mu_, lb), ub)
+        gen_number += 1
     return sol.genotype, sol.obj_value
 
 
@@ -372,6 +385,7 @@ class Config:
     lambda_mutation: int = 100
     budget_mutation: int = 2000
     seq_length: int = 640
+    is_log_distr_umda: bool = False
 
     @staticmethod
     def implemented_algorithms():
@@ -395,7 +409,7 @@ def run_optimization(config: Config):
         opt()
     elif config.algorithm == 'umda':
         umda_Znk_minimization(config.n_segms, F.instrument.filterlibrarysize, config.mu_, config.lambda_, F,
-                              lambda i1, s, i2: s > config.budget)
+                              lambda i1, s, i2: s > config.budget, config.is_log_distr_umda)
 
 
 # %%
@@ -416,6 +430,7 @@ def main():
     parser.add_argument('--lambda_mutation', help='Number of offspring in UMDA during mutation', type=int, default=100)
     parser.add_argument('--budget_mutation', help='Max number of distances evals during mutation', type=int, default=2000)
     parser.add_argument('--seq_length', help='Target length of the sequence of filters', type=int, default=640)
+    parser.add_argument('--log_distr', help='Flag to print distribution for every generation in UMDA', type=bool, default=False)
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True,
                                 choices=Config.implemented_algorithms())
@@ -441,7 +456,8 @@ def main():
                mu_mutation=args.mu_mutation,
                lambda_mutation=args.lambda_mutation,
                budget_mutation=args.budget_mutation,
-               seq_length=args.seq_length))
+               seq_length=args.seq_length,
+               is_log_distr_umda=args.log_distr))
 
 
 if __name__ == '__main__':
