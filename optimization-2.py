@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 import random
 import utils
@@ -371,10 +373,12 @@ class Config:
     budget_mutation: int = 2000
     seq_length: int = 640
 
-    __algorithms = frozenset(['ga', 'umda'])
+    @staticmethod
+    def implemented_algorithms():
+        return frozenset(['ga', 'umda'])
 
     def validate(self):
-        if self.algorithm not in self.__algorithms:
+        if self.algorithm not in Config.implemented_algorithms():
             raise ValueError(f'Invalid algorithm {self.algorithm}. Valid ones are: {self.__algorithms}')
         return True
 
@@ -394,22 +398,51 @@ def run_optimization(config: Config):
                               lambda i1, s, i2: s > config.budget)
 
 
-run_optimization(
-    Config(algorithm='ga',
-           algorithm_info='EA with crossover and maximal entropy driven mutations',
-           folder_name=f'my-exp/exp_{utils.now_date_time_str()}',
-           n_segms=16,
-           n_reps=1000,
-           mu_=2,
-           lambda_=4,
-           budget=1000,
-           d0_method='3',
-           d1_method='3',
-           mu_explore=10,
-           lambda_explore=100,
-           budget_explore=2000,
-           mu_mutation=10,
-           lambda_mutation=100,
-           budget_mutation=2000,
-           seq_length=640))
 # %%
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Runs optimization of the function by SRON with configuration')
+    parser.add_argument('-i', '--algorithm_info', help='Information of the optimization algorithm', default='info')
+    parser.add_argument('-r', '--n_reps', help='Number of resampling per point', type=int, default=1000)
+    parser.add_argument('-m', '--mu', help='Number of parents in EA', type=int, default=10)
+    parser.add_argument('-l', '--lambda_', help='Number of offspring in EA', type=int, default=20)
+    parser.add_argument('-d0', '--d0_method', help='Distance between filters', default='2')
+    parser.add_argument('-d1', '--d1_method', help='Distance between sequences of filters', default='kirill')
+    parser.add_argument('--mu_explore', help='Number of parents in UMDA during exploration', type=int, default=10)
+    parser.add_argument('--lambda_explore', help='Number of offspring in UMDA during exploration', type=int, default=100)
+    parser.add_argument('--budget_explore', help='Max number of distance evals during exploration', type=int, default=2000)
+    parser.add_argument('--mu_mutation', help='Number of parents in UMDA during mutation', type=int, default=10)
+    parser.add_argument('--lambda_mutation', help='Number of offspring in UMDA during mutation', type=int, default=100)
+    parser.add_argument('--budget_mutation', help='Max number of distances evals during mutation', type=int, default=2000)
+    parser.add_argument('--seq_length', help='Target length of the sequence of filters', type=int, default=640)
+    required_named = parser.add_argument_group('required named arguments')
+    required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True,
+                                choices=Config.implemented_algorithms())
+    required_named.add_argument('-f', '--folder_name', help='Name of the folder with logs', required=True)
+    required_named.add_argument('-n', '--n_segms', help='Number of segments', type=int, required=True)
+    required_named.add_argument('-b', '--budget', help='Max number of obj function evals', type=int, default=5000)
+    args = parser.parse_args()
+
+    run_optimization(
+        Config(algorithm=args.algorithm,
+               algorithm_info=args.algorithm_info,
+               folder_name=args.folder_name,
+               n_segms=args.n_segms,
+               n_reps=args.n_reps,
+               mu_=args.mu,
+               lambda_=args.lambda_,
+               budget=args.budget,
+               d0_method=args.d0_method,
+               d1_method=args.d1_method,
+               mu_explore=args.mu_explore,
+               lambda_explore=args.lambda_explore,
+               budget_explore=args.budget_explore,
+               mu_mutation=args.mu_mutation,
+               lambda_mutation=args.lambda_mutation,
+               budget_mutation=args.budget_mutation,
+               seq_length=args.seq_length))
+
+
+if __name__ == '__main__':
+    main()
