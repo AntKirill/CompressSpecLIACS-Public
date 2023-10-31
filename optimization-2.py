@@ -134,8 +134,8 @@ class FilterSequenceDDMutation:
         self.lib_size = lib_size
         self.dist = dist
         self.config = config
-        global logger
-        utils.logger.watch(self, ['dSmallest', 'dLargest', 'm', 'step_size', 'step_error'])
+        if hasattr(utils, 'logger'):
+            utils.logger.watch(self, ['dSmallest', 'dLargest', 'm', 'step_size', 'step_error'])
 
     def findSmallestDist(self, x, budget: int):
         t = 2.
