@@ -1,76 +1,11 @@
 import argparse
 import os
 
-import numpy as np
-import random
 import utils
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
-
-class RandomEngine:
-    def __init__(self, seed=None):
-        if seed:
-            random.seed(seed)
-
-    def sample_uniform01(self):
-        return random.random()
-
-    def sample_simmetrical_Bernoulli(self):
-        return random.randint(0, 1)
-
-    def sample_Bernoulli(self, success_p):
-        return random.random() < success_p
-
-    def sample_int_uniform(self, from_incl, to_excl):
-        return random.randint(from_incl, to_excl + 1)
-
-    def sample_Binomial(self, n, success_p):
-        success = 0
-        for i in range(n):
-            if self.sample_uniform01() < success_p:
-                success += 1
-        return success
-
-    def sample_discrete_dist(self, p):
-        r = self.sample_uniform01()
-        cdf = 0
-        for i in range(1, len(p) + 1):
-            cdf = cdf + p[i - 1]
-            if cdf > r:
-                return i - 1
-
-    class TruncatedExponentialDistribution:
-        def __init__(self):
-            self.a = 0.
-            self.b = 1.
-            self.lambda0 = 0.
-            self.lambda1 = 0.
-
-        def build(self, m, acc):
-            lb = -1. / m
-            ub = -float(acc)
-            while ub - lb >= acc:
-                lambda_ = (lb + ub) / 2.
-                left = np.exp(lambda_) * (lambda_ - 1) / (np.exp(lambda_) - 1) + 1 / (np.exp(lambda_) - 1)
-                right = m * lambda_
-                if left >= right:
-                    lb = lambda_
-                else:
-                    ub = lambda_
-            self.lambda1 = lb
-            self.lambda0 = np.log(self.lambda1 / (np.exp(self.lambda1) - 1))
-            return self
-
-        def pdf(self, x):
-            return np.exp(self.lambda0 + self.lambda1 * x)
-
-        def inverse_cdf(self, p):
-            return (np.log(self.lambda1 * p + np.exp(self.lambda0)) - self.lambda0) / self.lambda1
-
-        def sample(self):
-            p = random.random()
-            return self.inverse_cdf(p)
+from myrandom import RandomEngine
+from objf import *
 
 
 class Individual:
@@ -210,68 +145,6 @@ class FilterSequenceDDMutation:
         arg, self.step_error = umda_Znk_minimization(self.seq_length, self.lib_size, self.config.mu_mutation,
                                                      self.config.lambda_mutation, f, is_terminate)
         return arg, self.step_error
-
-
-class ObjFunSRON:
-    def __init__(self, rep):
-        import instrumentsimulator
-        instrument_settings = instrumentsimulator.InstrumentSettings()
-        self.instrument = instrumentsimulator.InstrumentSimulator(instrument_settings)
-        self.rep = rep
-        self.search_space_dim = 640
-
-    def __call__(self, original):
-        self.x = np.zeros(self.rep)
-        for i in range(self.rep):
-            _, self.x[i], = self.instrument.simulateMeasurement(original, nCH4=2000, albedo=0.15, sza=70, n=1,
-                                                                verbose=False)
-        return np.mean(self.x ** 2)
-
-    @property
-    def sron_bias(self):
-        return 100 * np.nanmean(self.x)
-
-    @property
-    def sron_precision(self):
-        return 100 * np.std(self.x)
-
-
-class ProfiledObjFunSRON:
-    def __init__(self, of, config):
-        import utils
-        self.of = of
-        self.obj_f_wrapped = utils.add_logger(self.of, of.search_space_dim, config.folder_name, config.algorithm,
-                                              config.algorithm_info)
-
-    def __call__(self, x):
-        return self.obj_f_wrapped(x)
-
-    @property
-    def instrument(self):
-        return self.of.instrument
-
-    @property
-    def search_space_dim(self):
-        return self.of.search_space_dim
-
-
-class ReducedDimObjFunSRON:
-    def __init__(self, l: int, of):
-        import utils
-        self.of = of
-        self.dim_red = utils.SegmentsDimReduction(of.search_space_dim, l)
-
-    def __call__(self, x):
-        y = self.dim_red.to_original(x)
-        return self.of(y)
-
-    @property
-    def search_space_dim(self):
-        return self.dim_red.reduced_dim
-
-    @property
-    def instrument(self):
-        return self.of.instrument
 
 
 def create_profiled_obj_fun_for_reduced_space(config):
