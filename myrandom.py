@@ -95,5 +95,5 @@ class RandomEngine:
         return sel
 
     def sample_combination_uniform(self, n, k):
-        pos = rnd.sample_int_uniform(1, self.Cnk(n, k) + 1)
+        pos = self.sample_int_uniform(1, self.Cnk(n, k) + 1)
         return self.get_combination_by_number(n, k, pos)
