@@ -169,11 +169,11 @@ def main():
     c.n_reps = args.n_reps
     c.config_id = args.config_id
     c.process_folder = args.process_folder
+    c.config_folder = 'generated-configs-' + c.experiment
+    c.results_folder = 'results-' + c.experiment
     if args.mode == 'generate':
         experiment_hamming_genconfig(c.config_folder, c.n_segms, c.k)
     elif args.mode == 'run':
-        c.results_folder = 'results-' + c.experiment
-        c.config_folder = 'generated-configs-' + c.experiment
         if c.experiment == 'hamming':
             experiment_hamming_run(f'{c.config_folder}/{c.config_id}', f'{c.results_folder}/{c.config_id}', c.n_reps)
         else:
