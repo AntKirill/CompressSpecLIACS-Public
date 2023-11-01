@@ -1,14 +1,15 @@
 import os
 import numpy as np
+
+import ddmutation
 import myrandom
 import utils
 import objf
 import argparse
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import seaborn as sns
-import matplotlib as mpl
 import matplotlib.pyplot as plt
+from scipy import stats
 
 
 rnd = myrandom.RandomEngine(1)
@@ -62,9 +63,7 @@ def test(n, k):
         print(nn.tolist())
 
 
-def experiment_hamming_genconfig(folder, n, k):
-    x_ref = np.random.randint(0, L_size, n)
-    xs = generate_single_comp_changes(x_ref, n, k)
+def experiment_genconfig(folder, n, x_ref, xs):
     r = utils.SegmentsDimReduction(640, n)
     if not os.path.exists(folder):
         os.makedirs(folder, exist_ok=True)
@@ -72,12 +71,47 @@ def experiment_hamming_genconfig(folder, n, k):
         print(*r.to_original(x_ref), file=f)
         print(*r.to_original(x_ref), file=f)
     for i in range(len(xs)):
-        with open(f'{folder}/{i+1}', 'w') as f:
+        with open(f'{folder}/{i + 1}', 'w') as f:
             print(*r.to_original(x_ref), file=f)
             print(*r.to_original(xs[i]), file=f)
 
 
-def experiment_hamming_run(config_file_name, results_file_name, N):
+def generate_nn_wrt_distance(x, n, k, d):
+    @dataclass
+    class LocalConfig:
+        mu_explore: int = 10
+        lambda_explore: int = 100
+        budget_explore: int = 2000
+        mu_mutation: int = 10
+        lambda_mutation: int = 100
+        budget_mutation: int = 2000
+
+    config = LocalConfig()
+    dd_mut = ddmutation.FilterSequenceDDMutation(n, L_size, d, config)
+    min_dist = dd_mut.findSmallestDist(x, 10)
+    internal_f = lambda y: abs(d(x, y) - min_dist)
+    is_terminate = lambda it_number, spent_budget, obj_value: spent_budget >= config.budget_mutation or obj_value == 0
+    nn = []
+    for i in range(k):
+        y, err = dd_mut.internal_optimization(internal_f, is_terminate)
+        print(err)
+        nn.append(y)
+    return nn
+
+
+def experiment_hamming_genconfig(folder, n, k):
+    x_ref = np.random.randint(0, L_size, n)
+    xs = generate_single_comp_changes(x_ref, n, k)
+    experiment_genconfig(folder, n, x_ref, xs)
+
+
+def experiment_custom_genconfig(folder, n, k, d):
+    x_ref = np.random.randint(0, L_size, n)
+    xs = generate_nn_wrt_distance(x_ref, n, k, d)
+    experiment_genconfig(folder, n, x_ref, xs)
+
+
+def experiment_run(config_file_name, results_file_name, N):
     with open(config_file_name, 'r') as f:
         x_ref = list(map(int, f.readline().split()))
         x = list(map(int, f.readline().split()))
@@ -121,8 +155,10 @@ def process_results(process_folder, k):
     sims = []
     for i in range(0, k + 1):
         x_ref, x, values = parse_result(f'{process_folder}/{i}')
+        if len(d) > 0:
+            print(stats.ttest_ind(d[0], values, equal_var=False))
         cosine_sim = np.dot(x_ref, x) / np.linalg.norm(x_ref) / np.linalg.norm(x)
-        build_pdf(i, values)
+        # build_pdf(i, values)
         t = "{:.11f}".format(cosine_sim)
         if t[0] == '1':
             num = '1.0'
@@ -160,6 +196,8 @@ def main():
     parser.add_argument('-r', '--n_reps', help='Number of resampling per point', type=int, default=c.n_reps)
     parser.add_argument('-f', '--config_id', help='Id of a config in case we run', type=str, default=c.config_id)
     parser.add_argument('-p', '--process_folder', help='Folder with results to process', type=str, default=c.process_folder)
+    parser.add_argument('-d0', '--d0_method', help='Distance between filters', default='2')
+    parser.add_argument('-d1', '--d1_method', help='Distance between sequences of filters', default='kirill')
     required_named = parser.add_argument_group('Required Named Arguments')
     required_named.add_argument('-m', '--mode', help='Do we generate configs or run experiment?', choices=['run', 'generate', 'process'], required=True)
     args = parser.parse_args()
@@ -171,13 +209,20 @@ def main():
     c.process_folder = args.process_folder
     c.config_folder = 'generated-configs-' + c.experiment
     c.results_folder = 'results-' + c.experiment
+    c.d0_method = args.d0_method
+    c.d1_method = args.d1_method
     if args.mode == 'generate':
-        experiment_hamming_genconfig(c.config_folder, c.n_segms, c.k)
-    elif args.mode == 'run':
         if c.experiment == 'hamming':
-            experiment_hamming_run(f'{c.config_folder}/{c.config_id}', f'{c.results_folder}/{c.config_id}', c.n_reps)
+            experiment_hamming_genconfig(c.config_folder, c.n_segms, c.k)
+        elif c.experiment == 'custom':
+            F = objf.ReducedDimObjFunSRON(c.n_segms, objf.ObjFunSRON(1))
+            dist_matrix = utils.create_dist_matrix(F, c.d0_method)
+            d = utils.create_distance(F, dist_matrix, c.d1_method)
+            experiment_custom_genconfig(c.config_folder, c.n_segms, c.k, d)
         else:
-            raise ValueError('Not implemented yet')
+            raise ValueError(f'Experiment {c.experiment} not implemented yet')
+    elif args.mode == 'run':
+        experiment_run(f'{c.config_folder}/{c.config_id}', f'{c.results_folder}/{c.config_id}', c.n_reps)
     elif args.mode == 'process':
         process_results(c.process_folder, c.k)
     else:

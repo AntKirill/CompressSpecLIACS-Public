@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import matplotlib as mpl
+import numpy
 import numpy as np
 import scipy
 import sklearn.manifold
@@ -345,3 +346,25 @@ def add_segm_dim_reduction(f, original_dim, reduced_dim):
 
 if __name__ == '__main__':
     print(globals()[sys.argv[1]](*sys.argv[2:]))
+
+
+def generate_random_solution(seq_length, lib_size):
+    return np.random.randint(0, lib_size, seq_length)
+
+
+class Individual:
+    def __init__(self, genotype, obj_value):
+        self.genotype = genotype
+        self.obj_value = obj_value
+
+
+def create_dist_matrix(F, d0_method):
+    return FilterDistanceFactory(F.instrument).create_precomputed_filter_distance_matrix(d0_method,
+                                                                       f'precomputedFiltersDists/method{d0_method}.txt')
+
+
+def create_distance(F, dist_matrix, d1_method):
+    return SequenceDistanceFactory(d0=lambda s1, s2: dist_matrix[int(s1), int(s2)],
+                                   instrument=F.instrument,
+                                   M=640,
+                                   R=F.search_space_dim).create_sequence_distance(d1_method)

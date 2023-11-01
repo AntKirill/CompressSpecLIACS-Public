@@ -1,167 +1,18 @@
 import argparse
-import os
 
 import utils
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+from ddmutation import FilterSequenceDDMutation
 from myrandom import RandomEngine
 from objf import *
-
-
-class Individual:
-    def __init__(self, genotype, obj_value):
-        self.genotype = genotype
-        self.obj_value = obj_value
-
-
-def generate_random_solution(seq_length, lib_size):
-    return np.random.randint(0, lib_size, seq_length)
-
-
-def log_distribution(p, gen_number):
-    with open(os.path.join(utils.logger.folder_name, 'umda_distr.txt'), 'a') as f:
-        print(f'Generation {gen_number}, sz x crd', file=f)
-        for i in range(len(p)):
-            print(*p[i], sep=' ', file=f)
-        print('', flush=True, file=f)
-
-
-def umda_Znk_minimization(sz, crd, mu_, lambda_, f, term, is_log_p=False):
-    p = np.full((sz, crd), 1. / crd)
-    lb = 1 / ((crd - 1) * sz)
-    ub = 1. - lb
-    iteration = 0
-    spent_budget = 0
-    best_fitness = float("inf")
-    sol = None
-    gen_number = 1
-    while True:
-        if is_log_p:
-            log_distribution(p, gen_number)
-        if term(iteration, spent_budget, best_fitness):
-            break
-        pop = []
-        for i in range(lambda_):
-            x = np.zeros(sz, dtype=int)
-            for j in range(sz):
-                x[j] = rnd.sample_discrete_dist(p[j])
-            obj_value = f(x)
-            spent_budget += 1
-            pop.append(Individual(x, obj_value))
-        pop.sort(key=lambda ind: ind.obj_value)
-        if pop[0].obj_value < best_fitness:
-            sol = pop[0]
-            best_fitness = pop[0].obj_value
-        # print(best_fitness)
-        for i in range(sz):
-            cnt = np.zeros(crd, dtype=int)
-            for j in range(mu_):
-                cnt[pop[j].genotype[i]] += 1
-            for j in range(crd):
-                p[i][j] = min(max(cnt[j] / mu_, lb), ub)
-        gen_number += 1
-    return sol.genotype, sol.obj_value
-
-
-class FilterSequenceDDMutation:
-    def __init__(self, seq_length: int, lib_size: int, dist, config):
-        self.seq_length = seq_length
-        self.lib_size = lib_size
-        self.dist = dist
-        self.config = config
-        if hasattr(utils, 'logger'):
-            utils.logger.watch(self, ['dSmallest', 'dLargest', 'm', 'step_size', 'step_error'])
-
-    def findSmallestDist(self, x, budget: int):
-        t = 2.
-        z = generate_random_solution(self.seq_length, self.lib_size)
-        cur_dist = self.dist(x, z)
-        spent_budget = 0
-        while cur_dist > 0 and spent_budget < budget:
-            s = cur_dist / t
-            f = lambda y: self.dist(y, x) - s
-            term = lambda it_num, spent, objv: spent >= self.config.budget_explore or (objv <= 0 and objv > -s)
-            z, value = umda_Znk_minimization(self.seq_length, self.lib_size, self.config.mu_explore,
-                                             self.config.lambda_explore, f, term)
-            cur_dist = min(self.dist(x, z), cur_dist)
-            print(cur_dist)
-            spent_budget += 1
-        return cur_dist
-
-    def findLargestDist(self, x, budget: int):
-        t = 1.2
-        z = generate_random_solution(self.seq_length, self.lib_size)
-        cur_dist = self.dist(x, z)
-        spent_budget = 0
-        while cur_dist > 0 and spent_budget < budget:
-            s = cur_dist * t
-            f = lambda y: s - self.dist(y, x)
-            term = lambda it_num, spent, objv: spent >= self.config.budget_explore or objv <= 0
-            z, value = umda_Znk_minimization(self.seq_length, self.lib_size, self.config.mu_explore,
-                                             self.config.lambda_explore, f, term)
-            cur_dist = max(self.dist(x, z), cur_dist)
-            print(cur_dist)
-            spent_budget += 1
-        return cur_dist
-
-    def findDistGamma(self, dMin, dMax):
-        delta = 1e-4
-        dd = (dMax / dMin) ** 2.
-        eps1 = delta
-        eps2 = 0.
-        dEpsMin = float("inf")
-        while eps1 <= 0.01:
-            eps2LB = (1. - eps1) ** dd
-            dEps = eps2LB - eps1
-            if dEps < dEpsMin:
-                dEpsMin = dEps
-                eps2 = (eps1 + eps2LB) / 2.
-            if dEpsMin <= 0.:
-                break
-            eps1 += delta
-        lbGamma = np.sqrt(-np.log(eps2)) / dMax
-        ubGamma = np.sqrt(-np.log(1. - eps1)) / dMin
-        return (lbGamma + ubGamma) / 2.
-
-    def createDistribution(self):
-        return RandomEngine.TruncatedExponentialDistribution().build(self.m, 1e-9)
-
-    def initialize(self, known=None):
-        if known:
-            self.dSmallest, self.dLargest, self.gamma = known
-        else:
-            x = generate_random_solution(self.seq_length, self.lib_size)
-            self.dSmallest = self.findSmallestDist(x, 10)
-            self.dLargest = self.findLargestDist(x, 10)
-            self.gamma = self.findDistGamma(self.dSmallest, self.dLargest)
-        self.m = 2 * self.dSmallest
-        self.D = self.createDistribution()
-
-    def make_mutation(self, x, budget: int):
-        s = self.D.sample()
-        self.step_size = np.sqrt(-np.log(1 - s)) / self.gamma
-        f = lambda y: abs(self.dist(x, y) - self.step_size)
-        is_terminate = lambda it_number, spent_budget, obj_value: spent_budget >= budget or obj_value == 0
-        arg, self.step_error = umda_Znk_minimization(self.seq_length, self.lib_size, self.config.mu_mutation,
-                                                     self.config.lambda_mutation, f, is_terminate)
-        return arg, self.step_error
+from umda import umda_Zn_minimization
+from utils import generate_random_solution, Individual, create_dist_matrix, create_distance
 
 
 def create_profiled_obj_fun_for_reduced_space(config):
     return ReducedDimObjFunSRON(config.n_segms, ProfiledObjFunSRON(ObjFunSRON(config.n_reps), config))
-
-
-def create_dist_matrix(F, d0_method):
-    import utils
-    return utils.FilterDistanceFactory(F.instrument).create_precomputed_filter_distance_matrix(d0_method,
-                                                                                               f'precomputedFiltersDists/method{d0_method}.txt')
-
-
-def create_distance(F, dist_matrix, d1_method):
-    import utils
-    d0 = lambda s1, s2: dist_matrix[int(s1), int(s2)]
-    return utils.SequenceDistanceFactory(d0=d0, instrument=F.instrument, M=640,
-                                         R=F.search_space_dim).create_sequence_distance(d1_method)
 
 
 class FilterSequenceOptimization:
@@ -234,7 +85,7 @@ def create_bbob_function(f_id, dim, instance, crd):
 
 def run_umbda(f_id, dim, instance, crd, mu_, lambda_, term):
     f, argbest = create_bbob_function(f_id, dim, instance, crd)
-    arg, value = umda_Znk_minimization(dim, crd, mu_, lambda_, f, term)
+    arg, value = umda_Zn_minimization(dim, crd, mu_, lambda_, f, term)
     return value
 
 
@@ -281,8 +132,8 @@ def run_optimization(config: Config):
         opt = FilterSequenceOptimization(F, dist, config)
         opt()
     elif config.algorithm == 'umda':
-        umda_Znk_minimization(config.n_segms, F.instrument.filterlibrarysize, config.mu_, config.lambda_, F,
-                              lambda i1, s, i2: s > config.budget, config.is_log_distr_umda)
+        umda_Zn_minimization(config.n_segms, F.instrument.filterlibrarysize, config.mu_, config.lambda_, F,
+                             lambda i1, s, i2: s > config.budget, config.is_log_distr_umda)
 
 
 # %%

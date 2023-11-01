@@ -8,27 +8,33 @@ class RandomEngine:
         if seed:
             random.seed(seed)
 
-    def sample_uniform01(self):
+    @staticmethod
+    def sample_uniform01():
         return random.random()
 
-    def sample_simmetrical_Bernoulli(self):
+    @staticmethod
+    def sample_simmetrical_Bernoulli():
         return random.randint(0, 1)
 
-    def sample_Bernoulli(self, success_p):
+    @staticmethod
+    def sample_Bernoulli(success_p):
         return random.random() < success_p
 
-    def sample_int_uniform(self, from_incl, to_excl):
+    @staticmethod
+    def sample_int_uniform(from_incl, to_excl):
         return random.randint(from_incl, to_excl - 1)
 
-    def sample_Binomial(self, n, success_p):
+    @staticmethod
+    def sample_Binomial(n, success_p):
         success = 0
         for i in range(n):
-            if self.sample_uniform01() < success_p:
+            if RandomEngine.sample_uniform01() < success_p:
                 success += 1
         return success
 
-    def sample_discrete_dist(self, p):
-        r = self.sample_uniform01()
+    @staticmethod
+    def sample_discrete_dist(p):
+        r = RandomEngine.sample_uniform01()
         cdf = 0
         for i in range(1, len(p) + 1):
             cdf = cdf + p[i - 1]
@@ -67,7 +73,8 @@ class RandomEngine:
             p = random.random()
             return self.inverse_cdf(p)
 
-    def Cnk(self, n, k):
+    @staticmethod
+    def Cnk(n, k):
         if n == 0 and k == 0:
             return 1
         if k == 0:
@@ -76,14 +83,15 @@ class RandomEngine:
             return 0
         return math.factorial(n) // math.factorial(n - k) // math.factorial(k)
 
-    def get_combination_by_number(self, n, k, pos):
+    @staticmethod
+    def get_combination_by_number(n, k, pos):
         sel = [0] * k
         cur = 0
         prv = 0
         for i in range(k):
             isok = False
             for j in range(prv + 1, n + 1):
-                d = self.Cnk(n - j, k - i - 1)
+                d = RandomEngine.Cnk(n - j, k - i - 1)
                 if cur + d >= pos:
                     sel[i] = j
                     prv = j
@@ -94,6 +102,7 @@ class RandomEngine:
                 return None
         return sel
 
-    def sample_combination_uniform(self, n, k):
-        pos = self.sample_int_uniform(1, self.Cnk(n, k) + 1)
-        return self.get_combination_by_number(n, k, pos)
+    @staticmethod
+    def sample_combination_uniform(n, k):
+        pos = RandomEngine.sample_int_uniform(1, RandomEngine.Cnk(n, k) + 1)
+        return RandomEngine.get_combination_by_number(n, k, pos)
