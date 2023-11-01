@@ -18,7 +18,7 @@ class RandomEngine:
         return random.random() < success_p
 
     def sample_int_uniform(self, from_incl, to_excl):
-        return random.randint(from_incl, to_excl + 1)
+        return random.randint(from_incl, to_excl - 1)
 
     def sample_Binomial(self, n, success_p):
         success = 0
@@ -95,5 +95,5 @@ class RandomEngine:
         return sel
 
     def sample_combination_uniform(self, n, k):
-        pos = random.randint(1, self.Cnk(n, k) + 1)
+        pos = rnd.sample_int_uniform(1, self.Cnk(n, k) + 1)
         return self.get_combination_by_number(n, k, pos)

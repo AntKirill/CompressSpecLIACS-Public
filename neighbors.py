@@ -6,8 +6,12 @@ import objf
 import argparse
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import seaborn as sns
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
-r = myrandom.RandomEngine(1)
+
+rnd = myrandom.RandomEngine(1)
 L_size = 4374
 
 
@@ -19,7 +23,12 @@ def cyclic_plus(x, d):
         elif x[i] + d[i] >= L_size:
             y[i] = 0
         else:
-            y[i] = x[i] + d[i]
+            if d[i] > 0:
+                y[i] = rnd.sample_int_uniform(x[i] + 1, L_size)
+            elif d[i] < 0:
+                y[i] = rnd.sample_int_uniform(0, x[i])
+            else:
+                y[i] = x[i]
     return y
 
 
@@ -34,7 +43,7 @@ def single_comp_changes_by_lex_order(n, p):
 
 # n is number of segments, k is number of neighbors
 def generate_single_comp_changes(x_ref, n, k):
-    sel = r.sample_combination_uniform(2*n, k)
+    sel = rnd.sample_combination_uniform(2*n, k)
     np.random.shuffle(sel)
     objs = [None] * k
     for i in range(k):
@@ -44,10 +53,12 @@ def generate_single_comp_changes(x_ref, n, k):
 
 
 def test(n, k):
+    np.random.seed(1)
     x_ref = np.random.randint(0, L_size, n)
     ns = generate_single_comp_changes(x_ref, n, k)
     print(x_ref.tolist())
     for nn in ns:
+        assert np.linalg.norm(x_ref - nn) > 1e-9
         print(nn.tolist())
 
 
@@ -98,6 +109,34 @@ def parse_result(result_file_name):
     return x_ref, x, values
 
 
+def build_pdf(k, vals):
+    fig = plt.figure()
+    plt.hist(vals, bins=1000)
+    fig.savefig(f'pdfs/pdf_{k}.pdf')
+    plt.close()
+
+
+def process_results(process_folder, k):
+    d = []
+    sims = []
+    for i in range(0, k + 1):
+        x_ref, x, values = parse_result(f'{process_folder}/{i}')
+        cosine_sim = np.dot(x_ref, x) / np.linalg.norm(x_ref) / np.linalg.norm(x)
+        build_pdf(i, values)
+        t = "{:.11f}".format(cosine_sim)
+        if t[0] == '1':
+            num = '1.0'
+        else:
+            num = '..' + t[9:]
+        sims.append(num)
+        d.append(values)
+    fig, ax = plt.subplots()
+    ax.boxplot(d, notch=True, sym='')
+    plt.yscale('log')
+    plt.xticks(range(1, len(d) + 1), sims, size=3)
+    plt.savefig('box-plot-neighbors-hamming.pdf')
+    plt.close()
+
 
 @dataclass_json
 @dataclass
@@ -109,6 +148,7 @@ class Config:
     config_id: str = '__default__'
     config_folder: str = 'generated-configs-hamming'
     results_folder: str = 'results-hamming'
+    process_folder: str = '__default__'
 
 
 def main():
@@ -118,21 +158,28 @@ def main():
     parser.add_argument('-n', '--n_segms', help='Number of segments', type=int, default=c.n_segms)
     parser.add_argument('-k', '--combs', help='Number of combinations that we are ready to wait for', type=int, default=c.k)
     parser.add_argument('-r', '--n_reps', help='Number of resampling per point', type=int, default=c.n_reps)
-    parser.add_argument('-f', '--config_id', help='Id of a config in case we run', type=str, default='__default__')
+    parser.add_argument('-f', '--config_id', help='Id of a config in case we run', type=str, default=c.config_id)
+    parser.add_argument('-p', '--process_folder', help='Folder with results to process', type=str, default=c.process_folder)
     required_named = parser.add_argument_group('Required Named Arguments')
-    required_named.add_argument('-m', '--mode', help='Do we generate configs or run experiment?', choices=['run', 'generate'], required=True)
+    required_named.add_argument('-m', '--mode', help='Do we generate configs or run experiment?', choices=['run', 'generate', 'process'], required=True)
     args = parser.parse_args()
     c.experiment = args.experiment
     c.n_segms = args.n_segms
     c.k = args.combs
     c.n_reps = args.n_reps
     c.config_id = args.config_id
+    c.process_folder = args.process_folder
     if args.mode == 'generate':
         experiment_hamming_genconfig(c.config_folder, c.n_segms, c.k)
     elif args.mode == 'run':
         c.results_folder = 'results-' + c.experiment
         c.config_folder = 'generated-configs-' + c.experiment
-        experiment_hamming_run(f'{c.config_folder}/{c.config_id}', f'{c.results_folder}/{c.config_id}', c.n_reps)
+        if c.experiment == 'hamming':
+            experiment_hamming_run(f'{c.config_folder}/{c.config_id}', f'{c.results_folder}/{c.config_id}', c.n_reps)
+        else:
+            raise ValueError('Not implemented yet')
+    elif args.mode == 'process':
+        process_results(c.process_folder, c.k)
     else:
         raise ValueError(f'Invalid mode {args.mode}')
 
