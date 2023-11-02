@@ -140,6 +140,8 @@ def experiment_custom_genconfig(folder, n, k, d):
              2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464,
              2464, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374,
              374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374]
+    dimred = utils.SegmentsDimReduction(640, n)
+    x_ref = dimred.to_reduced(x_ref)
     xs = generate_nn_wrt_distance(x_ref, n, k, d)
     experiment_genconfig(folder, n, x_ref, xs)
 
