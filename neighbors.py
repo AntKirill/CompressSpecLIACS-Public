@@ -11,7 +11,6 @@ from dataclasses_json import dataclass_json
 import matplotlib.pyplot as plt
 from scipy import stats
 
-
 rnd = myrandom.RandomEngine(1)
 L_size = 4374
 
@@ -44,7 +43,7 @@ def single_comp_changes_by_lex_order(n, p):
 
 # n is number of segments, k is number of neighbors
 def generate_single_comp_changes(x_ref, n, k):
-    sel = rnd.sample_combination_uniform(2*n, k)
+    sel = rnd.sample_combination_uniform(2 * n, k)
     np.random.shuffle(sel)
     objs = [None] * k
     for i in range(k):
@@ -106,7 +105,41 @@ def experiment_hamming_genconfig(folder, n, k):
 
 
 def experiment_custom_genconfig(folder, n, k, d):
-    x_ref = np.random.randint(0, L_size, n)
+    # x_ref = np.random.randint(0, L_size, n)
+    x_ref = [587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587,
+             587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 587, 1859, 1859,
+             1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859,
+             1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859, 1859,
+             1859, 1859, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930,
+             930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930, 930,
+             2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729,
+             2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729, 2729,
+             2729, 2729, 2729, 2729, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119,
+             4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119,
+             4119, 4119, 4119, 4119, 4119, 4119, 4119, 4119, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187,
+             1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187,
+             1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1187, 1336, 1336, 1336, 1336, 1336, 1336,
+             1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336,
+             1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 1336, 3586, 3586,
+             3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586,
+             3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586, 3586,
+             3586, 3586, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140,
+             140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140, 140,
+             2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627,
+             2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627, 2627,
+             2627, 2627, 2627, 2627, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891,
+             891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891, 891,
+             891, 891, 891, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130,
+             3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130, 3130,
+             3130, 3130, 3130, 3130, 3130, 3130, 3130, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917,
+             1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917,
+             1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1917, 1862, 1862, 1862, 1862, 1862, 1862, 1862,
+             1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862,
+             1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 1862, 2464, 2464, 2464,
+             2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464,
+             2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464, 2464,
+             2464, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374,
+             374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374, 374]
     xs = generate_nn_wrt_distance(x_ref, n, k, d)
     experiment_genconfig(folder, n, x_ref, xs)
 
@@ -140,7 +173,7 @@ def parse_result(result_file_name):
                 x = list(map(int, line.split()))
             else:
                 values.append(float(line))
-    return x_ref, x, values
+    return x_ref, x, values[:1000]
 
 
 def build_pdf(k, vals):
@@ -153,24 +186,26 @@ def build_pdf(k, vals):
 def process_results(process_folder, k):
     d = []
     sims = []
+    mds = []
     for i in range(0, k + 1):
         x_ref, x, values = parse_result(f'{process_folder}/{i}')
         if len(d) > 0:
             print(stats.ttest_ind(d[0], values, equal_var=False))
         cosine_sim = np.dot(x_ref, x) / np.linalg.norm(x_ref) / np.linalg.norm(x)
         # build_pdf(i, values)
-        t = "{:.11f}".format(cosine_sim)
-        if t[0] == '1':
-            num = '1.0'
-        else:
-            num = '..' + t[9:]
+        num = "{:.8f}".format(cosine_sim)
+        # if t[0] == '1':
+        # num = '1.0'
+        # else:
+        # num = '..' + t[1:]
         sims.append(num)
         d.append(values)
+        mds.append(np.mean(values))
     fig, ax = plt.subplots()
-    ax.boxplot(d, notch=True, sym='')
+    ax.boxplot(d, notch=True, sym='', usermedians=mds)
     plt.yscale('log')
-    plt.xticks(range(1, len(d) + 1), sims, size=3)
-    plt.savefig('box-plot-neighbors-hamming.pdf')
+    plt.xticks(range(1, len(d) + 1), sims, size=3, rotation='vertical', verticalalignment='top')
+    plt.savefig('box-plot-neighbors-custom.pdf')
     plt.close()
 
 
@@ -179,8 +214,8 @@ def process_results(process_folder, k):
 class Config:
     experiment: str = 'hamming'
     n_segms: int = 16
-    k: int = 32 # number of combinations that we are ready to wait for
-    n_reps: int = 1000 # number of resamples of every point
+    k: int = 32  # number of combinations that we are ready to wait for
+    n_reps: int = 1000  # number of resamples of every point
     config_id: str = '__default__'
     config_folder: str = 'generated-configs-hamming'
     results_folder: str = 'results-hamming'
@@ -190,16 +225,20 @@ class Config:
 def main():
     c = Config()
     parser = argparse.ArgumentParser(description='Run experiments with distance to the neighbors')
-    parser.add_argument('-e', '--experiment', help='Which experiment to run', choices=['hamming', 'custom'], default=c.experiment)
+    parser.add_argument('-e', '--experiment', help='Which experiment to run', choices=['hamming', 'custom'],
+                        default=c.experiment)
     parser.add_argument('-n', '--n_segms', help='Number of segments', type=int, default=c.n_segms)
-    parser.add_argument('-k', '--combs', help='Number of combinations that we are ready to wait for', type=int, default=c.k)
+    parser.add_argument('-k', '--combs', help='Number of combinations that we are ready to wait for', type=int,
+                        default=c.k)
     parser.add_argument('-r', '--n_reps', help='Number of resampling per point', type=int, default=c.n_reps)
     parser.add_argument('-f', '--config_id', help='Id of a config in case we run', type=str, default=c.config_id)
-    parser.add_argument('-p', '--process_folder', help='Folder with results to process', type=str, default=c.process_folder)
+    parser.add_argument('-p', '--process_folder', help='Folder with results to process', type=str,
+                        default=c.process_folder)
     parser.add_argument('-d0', '--d0_method', help='Distance between filters', default='2')
     parser.add_argument('-d1', '--d1_method', help='Distance between sequences of filters', default='kirill')
     required_named = parser.add_argument_group('Required Named Arguments')
-    required_named.add_argument('-m', '--mode', help='Do we generate configs or run experiment?', choices=['run', 'generate', 'process'], required=True)
+    required_named.add_argument('-m', '--mode', help='Do we generate configs or run experiment?',
+                                choices=['run', 'generate', 'process'], required=True)
     args = parser.parse_args()
     c.experiment = args.experiment
     c.n_segms = args.n_segms
@@ -231,4 +270,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
