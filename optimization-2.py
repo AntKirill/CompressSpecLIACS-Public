@@ -89,6 +89,36 @@ def run_umbda(f_id, dim, instance, crd, mu_, lambda_, term):
     return value
 
 
+def ea_simple(F, n_segms, mu_, lambda_, is_term):
+    L_size = F.instrument.filterlibrarysize
+    print(F.of.of(F.instrument.filterguess()))
+    initial = [generate_random_solution(n_segms, L_size) for _ in range(mu_)]
+    population = [Individual(ind, F(ind)) for ind in initial]
+    spent_budget = len(initial)
+    mut_rate = 2./n_segms
+    while not is_term(0, spent_budget, 0):
+        next_population = []
+        for _ in range(lambda_):
+            parent_num = np.random.choice(len(population), 1, replace=False)
+            parent = population[parent_num[0]]
+            num_pos = rnd.sample_Binomial(len(parent.genotype), mut_rate)
+            if num_pos == 0:
+                num_pos = 1
+            poss = np.random.choice(len(parent.genotype), num_pos, replace=False)
+            offspring_genotype = np.copy(parent.genotype)
+            for pos in poss:
+                offspring_genotype[pos] = np.random.randint(0, L_size)
+            obj_value = F(offspring_genotype)
+            spent_budget += 1
+            next_population.append(Individual(offspring_genotype, obj_value))
+        all_population = np.concatenate((population, next_population)).tolist()
+        all_population.sort(key=lambda ind: ind.obj_value)
+        population = all_population[:mu_]
+        print(population[0].obj_value)
+    population.sort(key=lambda ind: ind.obj_value)
+    return population[0]
+
+
 @dataclass_json
 @dataclass
 class Config:
@@ -113,7 +143,7 @@ class Config:
 
     @staticmethod
     def implemented_algorithms():
-        return frozenset(['ga', 'umda'])
+        return frozenset(['ga', 'umda', 'ea-simple'])
 
     def validate(self):
         if self.algorithm not in Config.implemented_algorithms():
@@ -132,8 +162,12 @@ def run_optimization(config: Config):
         opt = FilterSequenceOptimization(F, dist, config)
         opt()
     elif config.algorithm == 'umda':
-        umda_Zn_minimization(config.n_segms, F.instrument.filterlibrarysize, config.mu_, config.lambda_, F,
+        umda_Zn_minimization(config.n_segms, F.instrument.filterlibrarysize,
+                             config.mu_, config.lambda_, F,
                              lambda i1, s, i2: s > config.budget, config.is_log_distr_umda)
+    elif config.algorithm == 'ea-simple':
+        solution = ea_simple(F, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)
+        print(solution.obj_value)
 
 
 # %%
