@@ -208,6 +208,7 @@ def build_surface_mean_var():
 # End methods
 # %%
 
+on_reload()
 means, variances = experiment_ratio_mean_var(1000)
 with open('mean_var_test.csv', 'w') as file:
     print('mean, var', file=file)
