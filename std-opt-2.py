@@ -208,12 +208,17 @@ def build_surface_mean_var():
 # End methods
 # %%
 
-on_reload()
-means, variances = experiment_ratio_mean_var(1000)
-with open('mean_var_test.csv', 'w') as file:
-    print('mean, var', file=file)
-    for m, v in zip(means, variences):
-        print(m, v, file=file)
-with open('ans.txt', 'w') as file:
-    print(np.log(np.mean(means**2/variances)), file=file)
+def mean_var_cluster():
+    on_reload()
+    means, variances = experiment_ratio_mean_var(1000)
+    with open('mean_var_test.csv', 'w') as file:
+        print('mean, var', file=file)
+        for m, v in zip(means, variences):
+            print(m, v, file=file)
+    with open('ans.txt', 'w') as file:
+        print(np.log(np.mean(means**2/variances)), file=file)
+
+
+if __name__ == '__main__':
+    print(globals()[sys.argv[1]](*sys.argv[2:]))
 
