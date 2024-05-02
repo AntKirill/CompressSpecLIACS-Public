@@ -141,10 +141,10 @@ def plot_dist():
     plt.show()
 
 
-def experiment_ratio_mean_var():
+def experiment_ratio_mean_var(N):
     means = []
     variances = []
-    for i in range(20):
+    for i in range(N):
         x = utils.generate_random_solution(16, L)
         container = DxSamplesContainer(Fr, x)
         obj_value = Fr(x, 1000)
@@ -154,7 +154,7 @@ def experiment_ratio_mean_var():
         means.append(m)
         variances.append(v)
         print(obj_value, m**2 + v, m**2/v)
-    return means, variances
+    return np.array(means), np.array(variances)
 
 
 def build_surface_mean_var():
@@ -208,5 +208,11 @@ def build_surface_mean_var():
 # End methods
 # %%
 
-if __name__ == '__main__':
-    print(globals()[sys.argv[1]](*sys.argv[2:]))
+means, variances = experiment_ratio_mean_var(1000)
+with open('mean_var_test.csv', 'w') as file:
+    print('mean, var', file=file)
+    for m, v in zip(means, variences):
+        print(m, v, file=file)
+with open('ans.txt', 'w') as file:
+    print(np.log(np.mean(means**2/variances)), file=file)
+
