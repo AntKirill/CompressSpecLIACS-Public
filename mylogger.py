@@ -78,7 +78,7 @@ class MyLogger:
 
 
     def log_config(self, config):
-       with open(f'{self.root}/config.json', 'w') as f:
+       with open(f'{self.folder_name}/config.json', 'w') as f:
            f.write(config.to_json())
 
     def log_column_names(self):
@@ -151,14 +151,15 @@ class MyObjectiveFunctionWrapper:
         self.min_distance = float('inf')
         self.arg_min = None
 
-    def __call__(self, x):
-        cur_value = self.my_function(x)
+    def __call__(self, x, *args, **kwargs):
+        cur_value = self.my_function(x, *args, **kwargs)
         self.cnt_eval += 1
         distance = cur_value - self.optimum
         if distance < self.min_distance:
             self.min_distance = distance
             self.arg_min = x
             self.eval_min = self.cnt_eval
+            print('New min:', self.min_distance, flush=True)
         for l in self.my_loggers:
             l.log(self.cnt_eval, x, distance, self.eval_min,
                   self.arg_min, self.min_distance)

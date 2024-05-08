@@ -47,8 +47,10 @@ class RandomEngine:
             self.b = 1.
             self.lambda0 = 0.
             self.lambda1 = 0.
+            self.mean = None
 
         def build(self, m, acc):
+            self.mean = m
             lb = -1. / m
             ub = -float(acc)
             while ub - lb >= acc:
@@ -65,6 +67,9 @@ class RandomEngine:
 
         def pdf(self, x):
             return np.exp(self.lambda0 + self.lambda1 * x)
+        
+        def cdf(self, x):
+            return 1 + 1/self.lambda1*self.pdf(x) - 1/self.lambda1*np.exp(self.lambda0 + self.lambda1)
 
         def inverse_cdf(self, p):
             return (np.log(self.lambda1 * p + np.exp(self.lambda0)) - self.lambda0) / self.lambda1

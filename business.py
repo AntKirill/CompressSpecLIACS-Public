@@ -469,7 +469,8 @@ def build_averaged_convergence2(nruns=100, budget=5000):
                     'results-09-10-23/exp_09-10-2023_11h57m16s',
                     'results-09-10-23/exp_09-10-2023_11h58m07s',
                     'results-09-10-23/exp_09-10-2023_11h58m33s',
-                    'results-29-09-23/umda/']
+                    # 'results-29-09-23/umda/'
+                    ]
     # data_folders = ['my-exp/merged/',
     #                 'results-29-09-23/umda/']
     # data_folders = ['results-22-02-23/new-dims/mk_2_s4_20-02-2023_20h',
@@ -481,7 +482,7 @@ def build_averaged_convergence2(nruns=100, budget=5000):
     # 'results-22-02-23/new-dims/m3_s4_20-02-2023_20h',
     # 'results-20-02-23/seqdist-3',
     # 'results-22-02-23/new-dims/m3_s32_20-02-2023_20h']
-    colors = mpl.cm.jet(np.linspace(0, 1, len(data_folders)))
+    colors = mpl.cm.brg(np.linspace(0, 1, len(data_folders)))
     # colors = ['red', 'blue', 'green', 'purple', 'orange', 'cyan']
     # names = ['$(15 + 30)$ PhEA, LAP dist, Uniform Mut, PermBased approx',
     # '$(15 + 30)$ PhEA, method 2 dist, Uniform Mut, Simple approx',
@@ -491,7 +492,8 @@ def build_averaged_convergence2(nruns=100, budget=5000):
              'EA, 20 runs, $R=16$, 3-3',
              'EA, 20 runs, $R=16$, 2-lap',
              'EA, 20 runs, $R=16$, 3-lap',
-             'UMDA, 20 runs, $R=16$']
+             # 'UMDA, 20 runs, $R=16$'
+             ]
     # names = ['Modified EA, $d_1$ with LAP(2), $R = 4$, 3 runs',
              # 'Modified EA, $d_1$ with LAP(2), $R = 16$, 1 run',
              # 'Modified EA, $d_1$ with LAP(2), $R = 32$, 3 runs',
@@ -501,7 +503,7 @@ def build_averaged_convergence2(nruns=100, budget=5000):
              # 'Modified EA, $d_1$ with method 3, $R = 4$, 1 run',
              # 'EA, $d_1$ with method 3, $R = 16$, 2 runs ',
              # 'Modified EA, $d_1$ with method 3, $R = 32$, 3 runs']
-    pdf_name = 'averaged-convergence-09-10-23.pdf'
+    pdf_name = 'averaged-convergence-15-12-23.pdf'
 
     nruns = int(nruns)
     budget = int(budget)

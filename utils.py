@@ -330,10 +330,10 @@ def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, gener
                                     algorithm_info=alg_info,
                                     logStrategy=mylogger.LoggingBestSoFar,
                                     isLogArg=True)
-    logger.watch(f, ['sron_bias', 'sron_precision'])
-    logger_best.watch(f, ['sron_bias', 'sron_precision'])
-    if generator is not None:
-        logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
+    # logger.watch(f, ['sron_bias', 'sron_precision'])
+    # logger_best.watch(f, ['sron_bias', 'sron_precision'])
+    # if generator is not None:
+    #     logger.watch(generator, ['distance_from_parent', 'target_distance_from_parent'])
     wrapped_f.attach_logger(logger)
     wrapped_f.attach_logger(logger_best)
     return wrapped_f
@@ -353,9 +353,10 @@ def generate_random_solution(seq_length, lib_size):
 
 
 class Individual:
-    def __init__(self, genotype, obj_value):
+    def __init__(self, genotype, obj_value, stat):
         self.genotype = genotype
         self.obj_value = obj_value
+        self.stat = stat
 
 
 def create_dist_matrix(F, d0_method):
