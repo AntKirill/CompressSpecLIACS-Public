@@ -7,9 +7,12 @@ date: 11-11-2022
 
 """
 
+import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
 import numpy as np
 from dataclasses import dataclass
-import os
+
 import csv
 from scipy import optimize
 import time
