@@ -63,6 +63,8 @@ class FilterSequenceOptimization:
         self.config = config
         self.diversity_measure = None
         self.init_n_reps = config.n_reps
+        self.dim_reducer = utils.SegmentsDimReduction(F.of.search_space_dim, self.seq_length)
+
         utils.logger.watch(self, ['Diversity', 'iteration'])
 
     def calculate_diversity(self, population):
@@ -94,6 +96,7 @@ class FilterSequenceOptimization:
         generations_number = (self.config.budget - self.config.mu_) // self.config.lambda_
         for self.iteration in range(generations_number):
             self.diversity_measure = self.calculate_diversity(self.population)
+            self.log_population(self.iteration, self.population)
             self.next_population = []
             for _ in range(self.config.lambda_):
                 parent1, parent2 = self.choose(self.population)
@@ -104,7 +107,15 @@ class FilterSequenceOptimization:
                 self.next_population.append(offspring_ind)
             self.population = self.survival_selection(self.population, self.next_population, self.config.mu_)
         self.population.sort(key=lambda ind: ind.obj_value())
+        self.log_population(generations_number, self.population)
         return self.population[0]
+
+    def log_population(self, population_number, population):
+        xs, values = [], []
+        for ind in population:
+            xs.append(self.dim_reducer.to_original(ind.x))
+            values.append(ind.obj_value())
+        utils.logger.log_population(population_number, xs, values)
 
     def choose(self, population):
         return np.random.choice(population, 2, replace=False)
