@@ -28,7 +28,7 @@ class CriteriaD:
         self.x = None
 
     def __call__(self, original):
-        _, value, = self.instrument.simulateMeasurement(original, nCH4=2000, albedo=0.15, sza=70, n=1, verbose=False)
+        _, value, = self.instrument.simulateMeasurement(original, nCH4=2000, albedo=0.15, sza=70, n=1, extended=True, verbose=False)
         return value
 
 
