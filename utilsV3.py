@@ -54,7 +54,7 @@ class ProfiledF:
         reload(mylogger)
         reload(utils)
         self.of = of
-        self.obj_f_wrapped = utils.add_logger(self.of, of.search_space_dim, config.folder_name, config.algorithm, config.algorithm_info)
+        self.obj_f_wrapped = utils.add_logger(self.of, of.search_space_dim, config.folder_name, config.algorithm, config.algorithm_info, config.instance)
         utils.logger.watch(self, ['DxMeanSqr', 'DxVar'])
 
     def __call__(self, x, reps):
@@ -232,7 +232,7 @@ class Config:
     seq_length: int = 640
     is_log_distr_umda: bool = False
     dd_mutation: str = 'ea'
-    T: int = 10
+    instance: int = 0
 
     @staticmethod
     def implemented_algorithms():

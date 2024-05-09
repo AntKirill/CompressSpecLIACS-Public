@@ -22,10 +22,9 @@ class LoggingAll:
 
 
 class MyLogger:
-    def __init__(self, root='experiments', folder_name='all', algorithm_name='UNKNOWN', suite='unkown suite', algorithm_info='algorithm_info', logStrategy=LoggingAll, isLogArg=False, verbose=True):
+    def __init__(self, root='experiments', folder_name='all', algorithm_name='UNKNOWN', suite='unkown suite', algorithm_info='algorithm_info', logStrategy=LoggingAll, isLogArg=False, verbose=True, instance=None):
         self.root = root
-        self.folder_name = MyLogger.__generate_dir_name(
-            f'{root}/{folder_name}')
+        self.folder_name = MyLogger.__generate_dir_name(f'{root}/{folder_name}', instance)
         self.algorithm_name = algorithm_name
         self.algorithm_info = algorithm_info
         self.suite = suite
@@ -47,14 +46,10 @@ class MyLogger:
         self.problem_dim = None
 
     @staticmethod
-    def __generate_dir_name(name, x=0):
-        while True:
-            dir_name = (name + ('-' + str(x))).strip()
-            if not os.path.exists(dir_name):
-                os.makedirs(dir_name, exist_ok=True)
-                return dir_name
-            else:
-                x = x + 1
+    def __generate_dir_name(name, x):
+        dir_name = (name + ('-' + str(x))).strip()
+        os.makedirs(dir_name, exist_ok=False)
+        return dir_name
 
     def watch(self, algorithm, extra_data: List):
         self.algorithms.append(algorithm)
@@ -75,7 +70,6 @@ class MyLogger:
         self.meta['scenarios'].append({'dimension': dim, 'path': self.log_file_path, 'runs': [
                                       {'instance': instance, 'evals': 0, 'best': {}}]})
         os.makedirs(os.path.dirname(self.log_file_full_path), exist_ok=True)
-
 
     def log_config(self, config):
        with open(f'{self.folder_name}/config.json', 'w') as f:

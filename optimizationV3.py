@@ -173,13 +173,13 @@ def main():
     parser.add_argument('--log_distr', help='Flag to print distribution for every generation in UMDA', type=bool, default=dc.is_log_distr_umda)
     parser.add_argument('-o', '--dd_mutation', help='Distance-Driven mutation operator internal optimization', type=str, default=dc.dd_mutation,
                                 choices=Config.supported_dd_mutations())
-    required_named.add_argument('-b', '--budget', help='Max number of obj function evals', type=int, default=dc.budget)
+    parser.add_argument('-b', '--budget', help='Max number of obj function evals', type=int, default=dc.budget)
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True,
                                 choices=Config.implemented_algorithms())
     required_named.add_argument('-f', '--folder_name', help='Name of the folder with logs', required=True)
     required_named.add_argument('-n', '--n_segms', help='Number of segments', type=int, required=True)
-    # required_named.add_argument('--instance', help='Instance (random seed)', required=True)
+    required_named.add_argument('--instance', help='Instance number', type=int, required=True)
     args = parser.parse_args()
 
     run_optimization(
@@ -201,7 +201,8 @@ def main():
                budget_mutation=args.budget_mutation,
                seq_length=args.seq_length,
                is_log_distr_umda=args.log_distr,
-               dd_mutation=args.dd_mutation))
+               dd_mutation=args.dd_mutation,
+               instance=args.instance))
     
 
 if __name__ == '__main__':

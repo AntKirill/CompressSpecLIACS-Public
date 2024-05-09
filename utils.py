@@ -316,20 +316,22 @@ class SequenceDistanceFactory:
                                                                            dim_red.to_original(seq2), 3)
 
 
-def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, generator=None):
+def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, instance: int):
     wrapped_f = mylogger.MyObjectiveFunctionWrapper(f, dim=ndim, fname='SRON_nCH4_noisy_recovery')
     global logger
     logger = mylogger.MyLogger(root=root_name,
                                folder_name="everyeval",
                                algorithm_name=alg_name,
                                algorithm_info=alg_info,
-                               isLogArg=True)
+                               isLogArg=True,
+                               instance=instance)
     logger_best = mylogger.MyLogger(root=root_name,
                                     folder_name="bestsofar",
                                     algorithm_name=alg_name,
                                     algorithm_info=alg_info,
                                     logStrategy=mylogger.LoggingBestSoFar,
-                                    isLogArg=True)
+                                    isLogArg=True,
+                                    instance=instance)
     # logger.watch(f, ['sron_bias', 'sron_precision'])
     # logger_best.watch(f, ['sron_bias', 'sron_precision'])
     # if generator is not None:
