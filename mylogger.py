@@ -75,14 +75,14 @@ class MyLogger:
        with open(f'{self.folder_name}/config.json', 'w') as f:
            f.write(config.to_json())
 
-    def log_population(self, population_number, genotypes, obj_values):
+    def log_population(self, pop_numbers, genotypes, obj_values):
         with open(f'{self.folder_name}/last_population.csv', 'w') as file:
             print('value', 'population_number', sep=' ', end='', file=file)
             for i in range(len(genotypes[0])):
                 print(f' x{i}', end='', file=file)
             print(file=file)
-            for x, value in zip(genotypes, obj_values):
-                print(value, population_number, *x, sep=' ', file=file)            
+            for number, x, value in zip(pop_numbers, genotypes, obj_values):
+                print(value, number, *x, sep=' ', file=file)
 
     def log_column_names(self):
         with open(self.log_file_full_path, 'w') as f:

@@ -151,8 +151,8 @@ class DDMutationUMDA(DDMutation):
         return y
     
 
-def findExtremeDist(x, matrix_sorted_rows, dist, extreme_str, mutator):
-    if type(dist) is utils.SequenceDistanceKirill and len(x) == 16 and extreme_str == 'max':
+def findExtremeDist(x, matrix_sorted_rows, dist, extreme_str, mutator, d0_type, d1_type):
+    if d0_type == '2' and d1_type == 'kirill' and len(x) == 16 and extreme_str == 'max':
         return 0.0922
     if extreme_str == 'min':
         pos, min_dist, arg_min_dist = None, float("inf"), None
@@ -213,7 +213,7 @@ def createDistribution(m):
 @dataclass_json
 @dataclass
 class Config:
-    algorithm: str = 'ga'
+    algorithm: str = 'dd-ga'
     algorithm_info: str = 'info'
     folder_name: str = 'exp'
     n_segms: int = 16
@@ -236,7 +236,7 @@ class Config:
 
     @staticmethod
     def implemented_algorithms():
-        return frozenset(['ga', 'umda', 'ea-simple'])
+        return frozenset(['dd-ga', 'dd-opll', 'umda', 'ea-simple'])
 
     def supported_dd_mutations():
         return frozenset(['ea', 'umda'])

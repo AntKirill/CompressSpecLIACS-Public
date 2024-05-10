@@ -4,10 +4,11 @@ from umda import umda_Zn_minimization
 
 
 class Individual:
-    def __init__(self, F, x):
+    def __init__(self, F, x, population_number=0):
         self.noisy_objf = F
         self.x = x
         self.objf_x_samples = np.zeros(0)
+        self.population_number = population_number
 
     def add_samples(self, n):
         self.noisy_objf(self.x, n)
@@ -53,7 +54,7 @@ def ea_simple(F, config, n_segms, mu_, lambda_, is_term, init_pop=None, mut_rate
     return population[0]
 
 
-class FilterSequenceOptimization:
+class AbstractFilterSequenceOptimization(ABC):
     def __init__(self, F, dist_matrix_sorted, dist, config):
         self.F = F
         self.seq_length = F.search_space_dim
@@ -64,7 +65,7 @@ class FilterSequenceOptimization:
         self.diversity_measure = None
         self.init_n_reps = config.n_reps
         self.dim_reducer = utils.SegmentsDimReduction(F.of.search_space_dim, self.seq_length)
-
+        self.mean = 0.1
         utils.logger.watch(self, ['Diversity', 'iteration'])
 
     def calculate_diversity(self, population):
@@ -73,62 +74,27 @@ class FilterSequenceOptimization:
             for ind2 in population:
                 d += self.dist(ind1.x, ind2.x)
         return d / (2 * len(population))
-
-    def __call__(self, initial=None):
-        """
-        Minimization of objective function
-        """
-        if initial is None:
-            initial = [utils.generate_random_solution(self.seq_length, self.L) for _ in range(self.config.mu_)]
-        self.mean = 0.1
-        self.stepSizeD = RandomEngine.TruncatedExponentialDistribution().build(self.mean, 1e-9)
-        if self.config.dd_mutation == 'ea':
-            self.mutator = DDMutationEA(self.dist, self.dist_matrix_sorted)
-        else:
-            self.mutator = DDMutationUMDA(self.dist)
-        x = utils.generate_random_solution(self.seq_length, self.L)
-        self.dMin = findExtremeDist(x, self.dist_matrix_sorted, self.dist, 'min', self.mutator)
-        self.dMax = findExtremeDist(x, self.dist_matrix_sorted, self.dist, 'max', self.mutator)
-        self.gamma = findDistGamma(100*self.dMin, self.dMax)
-        self.population = [Individual(self.F, ind) for ind in initial]
-        for ind in self.population:
-            ind.add_samples(self.init_n_reps)
-        generations_number = (self.config.budget - self.config.mu_) // self.config.lambda_
-        for self.iteration in range(generations_number):
-            self.diversity_measure = self.calculate_diversity(self.population)
-            self.log_population(self.iteration, self.population)
-            self.next_population = []
-            for _ in range(self.config.lambda_):
-                parent1, parent2 = self.choose(self.population)
-                offspring = self.crossover(parent1, parent2)
-                offspring = self.mutation(offspring)
-                offspring_ind = Individual(self.F, offspring)
-                offspring_ind.add_samples(self.init_n_reps)
-                self.next_population.append(offspring_ind)
-            self.population = self.survival_selection(self.population, self.next_population, self.config.mu_)
-        self.population.sort(key=lambda ind: ind.obj_value())
-        self.log_population(generations_number, self.population)
-        return self.population[0]
-
-    def log_population(self, population_number, population):
-        xs, values = [], []
+    
+    def log_population(self, population):
+        pop_numbers, xs, values = [], [], []
         for ind in population:
             xs.append(self.dim_reducer.to_original(ind.x))
             values.append(ind.obj_value())
-        utils.logger.log_population(population_number, xs, values)
+            pop_numbers.append(ind.population_number)
+        utils.logger.log_population(pop_numbers, xs, values)
 
     def choose(self, population):
         return np.random.choice(population, 2, replace=False)
 
-    def crossover(self, parent1, parent2):
+    def crossover(self, parent1, parent2, c=0.5):
         offspring = np.copy(parent1.x)
         for i in range(len(offspring)):
-            rnd = np.random.randint(0, 2)
-            if rnd == 1:
+            rnd = np.random.uniform()
+            if rnd < c:
                 offspring[i] = parent2.x[i]
         return offspring
 
-    def mutation(self, x):
+    def ddMutation(self, x):
         s = self.stepSizeD.sample()
         step_size = np.sqrt(-np.log(1 - s)) / self.gamma
         y = self.mutator.mutation(x, step_size)
@@ -139,10 +105,93 @@ class FilterSequenceOptimization:
         all_population = np.concatenate((population, new_population)).tolist()
         all_population.sort(key=lambda ind: ind.obj_value())
         return all_population[:mu_]
+    
+    def select_best(self, inds):
+        min_, argmin_ = float("inf"), None
+        for ind in inds:
+            f = ind.obj_value()
+            if f < min_:
+                min_, argmin_ = f, ind
+        return argmin_
 
     @property
     def Diversity(self):
         return self.diversity_measure
+    
+    def configure_step_size_distribution(self):
+        self.stepSizeD = RandomEngine.TruncatedExponentialDistribution().build(self.mean, 1e-9)
+        if self.config.dd_mutation == 'ea':
+            self.mutator = DDMutationEA(self.dist, self.dist_matrix_sorted)
+        else:
+            self.mutator = DDMutationUMDA(self.dist)
+        x = utils.generate_random_solution(self.seq_length, self.L)
+        self.dMin = findExtremeDist(x, self.dist_matrix_sorted, self.dist, 'min', self.mutator, self.config.d0_method, self.config.d1_method)
+        self.dMax = findExtremeDist(x, self.dist_matrix_sorted, self.dist, 'max', self.mutator, self.config.d0_method, self.config.d1_method)
+        self.gamma = findDistGamma(100*self.dMin, self.dMax)
+
+    @abstractmethod
+    def __call__(self, initial=None):
+        pass
+
+
+class DDGA(AbstractFilterSequenceOptimization):
+    def __call__(self, initial=None):
+        """
+        Minimization of objective function
+        """
+        self.configure_step_size_distribution()
+        if initial is None:
+            initial = [utils.generate_random_solution(self.seq_length, self.L) for _ in range(self.config.mu_)]
+        self.population = [Individual(self.F, ind, None) for ind in initial]
+        for ind in self.population:
+            ind.add_samples(self.init_n_reps)
+        generations_number = (self.config.budget - self.config.mu_) // self.config.lambda_
+        for self.iteration in range(generations_number):
+            self.diversity_measure = self.calculate_diversity(self.population)
+            self.log_population(self.population)
+            self.next_population = []
+            for _ in range(self.config.lambda_):
+                parent1, parent2 = self.choose(self.population)
+                offspring = self.crossover(parent1, parent2)
+                offspring = self.ddMutation(offspring)
+                offspring_ind = Individual(self.F, offspring, self.iteration)
+                offspring_ind.add_samples(self.init_n_reps)
+                self.next_population.append(offspring_ind)
+            self.population = self.survival_selection(self.population, self.next_population, self.config.mu_)
+        self.population.sort(key=lambda ind: ind.obj_value())
+        self.log_population(self.population)
+        return self.population[0]
+
+
+class DDOPLL(AbstractFilterSequenceOptimization):
+    def __call__(self, initial=None):
+        self.configure_step_size_distribution()
+        if initial is None:
+            initial = utils.generate_random_solution(self.seq_length, self.L)
+        parent_ind = Individual(self.F, initial, None)
+        parent_ind.add_samples(self.config.n_reps)
+        y = []
+        rests_evals = self.config.budget
+        population_number = 0
+        while rests_evals > 0:
+            for i in range(self.config.lambda_):
+                offspring = self.ddMutation(parent_ind.x)
+                offspring_ind = Individual(self.F, offspring, population_number)
+                offspring_ind.add_samples(self.config.n_reps)
+                y.append(offspring_ind)
+                rests_evals -= 1
+            x1_ind = self.select_best(y)
+            y = []
+            for i in range(self.config.lambda_):
+                offspring = self.crossover(parent_ind, x1_ind)
+                offspring_ind = Individual(self.F, offspring, population_number)
+                offspring_ind.add_samples(self.config.n_reps)
+                y.append(offspring_ind)
+                rests_evals -= 1
+            x2_ind = self.select_best(y)
+            parent_ind = self.select_best([parent_ind, x2_ind])
+            population_number += 1
+        return parent_ind
 
 
 def run_optimization(config: Config):
@@ -150,11 +199,14 @@ def run_optimization(config: Config):
     PFR = create_profiled_obj_fun_for_reduced_space(config)
     global logger
     utils.logger.log_config(config)
-    if config.algorithm == 'ga':
+    if config.algorithm == 'dd-ga' or config.algorithm == 'dd-opll':
         dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
         dist_matrix_sorted = sort_dist_matrix(dist_matrix)
         dist = utils.create_distance(PFR, dist_matrix, config.d1_method)
-        opt = FilterSequenceOptimization(PFR, dist_matrix_sorted, dist, config)
+        if config.algorithm == 'dd-ga':
+            opt = DDGA(PFR, dist_matrix_sorted, dist, config)
+        elif config.algorithm == 'dd-opll':
+            opt = DDOPLL(PFR, dist_matrix_sorted, dist, config)
         opt()
     elif config.algorithm == 'umda':
         umda_Zn_minimization(config.n_segms, PFR.instrument.filterlibrarysize,
