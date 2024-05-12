@@ -19,6 +19,11 @@ class LoggingBestSoFar:
 class LoggingAll:
     def needToLog(self, value):
         return True
+    
+
+class LoggingNone:
+    def needToLog(self, value):
+        return False
 
 
 class MyLogger:
@@ -60,6 +65,7 @@ class MyLogger:
     def set_up_logger_for_problem(self, function_id, function_name, is_maximization, instance, dim):
         self.log_file_path = f'data_f{function_id}_{function_name}/IOHprofiler_f{function_id}_DIM{dim}.dat'
         self.log_file_full_path = f'{self.folder_name}/{self.log_file_path}'
+        self.log_populations_full_path = f'{self.folder_name}/populations.csv'
         self.meta_path = f'IOHprofiler_f{function_id}_{function_name}.json'
         self.meta_full_path = f'{self.folder_name}/{self.meta_path}'
         self.meta['function_id'] = function_id
@@ -75,14 +81,15 @@ class MyLogger:
        with open(f'{self.folder_name}/config.json', 'w') as f:
            f.write(config.to_json())
 
-    def log_population(self, pop_numbers, genotypes, obj_values):
-        with open(f'{self.folder_name}/last_population.csv', 'w') as file:
-            print('value', 'population_number', sep=' ', end='', file=file)
-            for i in range(len(genotypes[0])):
-                print(f' x{i}', end='', file=file)
-            print(file=file)
-            for number, x, value in zip(pop_numbers, genotypes, obj_values):
-                print(value, number, *x, sep=' ', file=file)
+    def log_population(self, cur_pop_number, pop_numbers, genotypes, obj_values, sample_sizes, diversity, pvalues):
+        if not os.path.exists(self.log_populations_full_path):
+            self.log_column_names()
+            if self.verbose:
+                print(f'Logging to {self.folder_name}')
+        with open(self.log_populations_full_path, 'a') as file:
+            print('Best so far:', min(obj_values), flush=True)
+            for sample_size, number, x, value, pvalue in zip(sample_sizes, pop_numbers, genotypes, obj_values, pvalues):
+                print(value, sample_size, cur_pop_number, number, pvalue, diversity, *x, sep=' ', file=file)
 
     def log_column_names(self):
         with open(self.log_file_full_path, 'w') as f:
@@ -94,6 +101,11 @@ class MyLogger:
                 for i in range(self.problem_dim):
                     f.write(f' x{i}')
             f.write('\n')
+        with open(self.log_populations_full_path, 'a') as file:
+            print('value', 'sample_size', 'pop_number_current', 'pop_number_creation', 'pvalue_vs_best', 'diversity', sep=' ', end='', file=file)
+            for i in range(self.problem_dim):
+                print(f' x{i}', end='', file=file)
+            print(file=file)
 
     def log_eval(self, evaluation_number, arg, value):
         if not os.path.exists(self.log_file_full_path):
@@ -162,7 +174,6 @@ class MyObjectiveFunctionWrapper:
             self.min_distance = distance
             self.arg_min = x
             self.eval_min = self.cnt_eval
-            print('New min:', self.min_distance, flush=True)
         for l in self.my_loggers:
             l.log(self.cnt_eval, x, distance, self.eval_min,
                   self.arg_min, self.min_distance)

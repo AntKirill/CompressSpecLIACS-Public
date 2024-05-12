@@ -233,18 +233,51 @@ class Config:
     is_log_distr_umda: bool = False
     dd_mutation: str = 'ea'
     instance: int = 0
+    robustness: str = 'fixed'
+    max_samples: int = 5000
+    significance: float = 0.05
+    sample_inc: int = 100
 
     @staticmethod
     def implemented_algorithms():
         return frozenset(['dd-ga', 'dd-opll', 'umda', 'ea-simple'])
 
+    @staticmethod
     def supported_dd_mutations():
         return frozenset(['ea', 'umda'])
-
-    def validate(self):
-        if self.algorithm not in Config.implemented_algorithms():
-            raise ValueError(f'Invalid algorithm {self.algorithm}. Valid ones are: {self.__algorithms}')
-        return True
+    
+    @staticmethod
+    def supported_robustness():
+        return frozenset(['fixed', 'welch'])
+    
+    def add_cml_args(self, parser):
+        parser.add_argument('-i', '--algorithm_info', help='Information of the optimization algorithm', default=self.algorithm_info)
+        parser.add_argument('--n_reps', help='Number of resampling per point', type=int, default=self.n_reps)
+        parser.add_argument('--mu_', help='Number of parents in EA', type=int, default=self.mu_)
+        parser.add_argument('--lambda_', help='Number of offspring in EA', type=int, default=self.lambda_)
+        parser.add_argument('-d0', '--d0_method', help='Distance between filters', default=self.d0_method)
+        parser.add_argument('-d1', '--d1_method', help='Distance between sequences of filters', default=self.d1_method)
+        parser.add_argument('--mu_explore', help='Number of parents in UMDA during exploration', type=int, default=self.mu_explore)
+        parser.add_argument('--lambda_explore', help='Number of offspring in UMDA during exploration', type=int, default=self.lambda_explore)
+        parser.add_argument('--budget_explore', help='Max number of distance evals during exploration', type=int, default=self.budget_explore)
+        parser.add_argument('--mu_mutation', help='Number of parents in UMDA during mutation', type=int, default=self.mu_mutation)
+        parser.add_argument('--lambda_mutation', help='Number of offspring in UMDA during mutation', type=int, default=self.lambda_mutation)
+        parser.add_argument('--budget_mutation', help='Max number of distances evals during mutation', type=int, default=self.budget_mutation)
+        parser.add_argument('--seq_length', help='Target length of the sequence of filters', type=int, default=self.seq_length)
+        parser.add_argument('--log_distr', help='Flag to print distribution for every generation in UMDA', type=bool, default=self.is_log_distr_umda)
+        parser.add_argument('--dd_mutation', help='Distance-Driven mutation operator internal optimization', type=str, default=self.dd_mutation, 
+                            choices=Config.supported_dd_mutations())
+        parser.add_argument('--budget', help='Max number of obj function evals', type=int, default=self.budget)
+        parser.add_argument('--robustness', help='Method to ensure statisticall significance when comparing noisy solutions', type=str, default=self.robustness, 
+                            choices=Config.supported_robustness())
+        parser.add_argument('--max_samples', help='Max number of samples per solution', type=int, default=self.max_samples)
+        parser.add_argument('--significance', help='Maximum pvalue in welch ttest to ensure sufficient statistical evidence in ranking', type=float, default=self.significance)
+        parser.add_argument('--sample_inc', help='Incrase in the number of samples', type=int, default=self.sample_inc)
+        required_named = parser.add_argument_group('required named arguments')
+        required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True, choices=Config.implemented_algorithms())
+        required_named.add_argument('--folder_name', help='Name of the folder with logs', required=True)
+        required_named.add_argument('--n_segms', help='Number of segments', type=int, required=True)
+        required_named.add_argument('--instance', help='Instance number', type=int, required=True)
 
 
 def create_profiled_obj_fun_for_reduced_space(config):

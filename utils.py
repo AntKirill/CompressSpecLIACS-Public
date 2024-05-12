@@ -323,6 +323,7 @@ def add_logger(f, ndim: int, root_name: str, alg_name: str, alg_info: str, insta
                                folder_name="everyeval",
                                algorithm_name=alg_name,
                                algorithm_info=alg_info,
+                               logStrategy=mylogger.LoggingNone,
                                isLogArg=True,
                                instance=instance)
     logger_best = mylogger.MyLogger(root=root_name,

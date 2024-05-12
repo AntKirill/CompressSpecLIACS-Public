@@ -54,6 +54,10 @@ def ea_simple(F, config, n_segms, mu_, lambda_, is_term, init_pop=None, mut_rate
     return population[0]
 
 
+def WelchTTestPvalue(ind1, ind2):
+    return stats.ttest_ind(ind1.objf_x_samples**2, ind2.objf_x_samples**2, equal_var=False).pvalue
+
+
 class AbstractFilterSequenceOptimization(ABC):
     def __init__(self, F, dist_matrix_sorted, dist, config):
         self.F = F
@@ -66,6 +70,9 @@ class AbstractFilterSequenceOptimization(ABC):
         self.init_n_reps = config.n_reps
         self.dim_reducer = utils.SegmentsDimReduction(F.of.search_space_dim, self.seq_length)
         self.mean = 0.1
+        self.MAXSAMPLES = config.max_samples
+        self.MAXSIGNIFICANCE = config.significance
+        self.SAMPLESINC = config.sample_inc
         utils.logger.watch(self, ['Diversity', 'iteration'])
 
     def calculate_diversity(self, population):
@@ -75,13 +82,16 @@ class AbstractFilterSequenceOptimization(ABC):
                 d += self.dist(ind1.x, ind2.x)
         return d / (2 * len(population))
     
-    def log_population(self, population):
-        pop_numbers, xs, values = [], [], []
+    def log_population(self, population, cur_pop_number):
+        self.diversity_measure = self.calculate_diversity(self.population)
+        pop_numbers, xs, values, sizes, pvalues = [], [], [], [], []
         for ind in population:
             xs.append(self.dim_reducer.to_original(ind.x))
             values.append(ind.obj_value())
             pop_numbers.append(ind.population_number)
-        utils.logger.log_population(pop_numbers, xs, values)
+            sizes.append(len(ind.objf_x_samples))
+            pvalues.append(WelchTTestPvalue(ind, population[0]))
+        utils.logger.log_population(cur_pop_number, pop_numbers, xs, values, sizes, self.diversity_measure, pvalues)
 
     def choose(self, population):
         return np.random.choice(population, 2, replace=False)
@@ -114,6 +124,40 @@ class AbstractFilterSequenceOptimization(ABC):
                 min_, argmin_ = f, ind
         return argmin_
 
+    def select_robust_best(self, inds):
+        pos_best = 0
+        while True:
+            is_best = True
+            for i in range(len(inds)):
+                if i == pos_best:
+                    continue
+                while True:
+                    pvalue = WelchTTestPvalue(inds[pos_best], inds[i])
+                    if pvalue < self.MAXSIGNIFICANCE or pvalue > 1 - self.MAXSIGNIFICANCE:
+                        break
+                    to_add_pos = pos_best
+                    if len(inds[pos_best].objf_x_samples) > len(inds[i].objf_x_samples):
+                        to_add_pos = i
+                    if len(inds[to_add_pos].objf_x_samples) < self.MAXSAMPLES:
+                        inds[to_add_pos].add_samples(self.SAMPLESINC)
+                    else:
+                        break
+                if inds[pos_best].obj_value() > inds[i].obj_value():
+                    pos_best = i
+                    is_best = False
+            if is_best:
+                break
+        return pos_best
+    
+    def robust_survival_selection(self, population, new_population, mu_):
+        all_population = np.concatenate((population, new_population)).tolist()
+        robust_best_inds = []
+        for i in range(mu_):
+            pos_robust_best = self.select_robust_best(all_population)
+            robust_best_inds.append(all_population[pos_robust_best])
+            all_population.pop(pos_robust_best)
+        return robust_best_inds
+
     @property
     def Diversity(self):
         return self.diversity_measure
@@ -135,6 +179,14 @@ class AbstractFilterSequenceOptimization(ABC):
 
 
 class DDGA(AbstractFilterSequenceOptimization):
+    def my_survival_selection(self):
+        if self.config.robustness == 'fixed':
+            return self.survival_selection(self.population, self.next_population, self.config.mu_)
+        elif self.config.robustness == 'welch':
+            return self.robust_survival_selection(self.population, self.next_population, self.config.mu_)
+        else:
+            raise ValueError(f'Robustness method {self.config.robustness} is not implemented')
+
     def __call__(self, initial=None):
         """
         Minimization of objective function
@@ -147,8 +199,7 @@ class DDGA(AbstractFilterSequenceOptimization):
             ind.add_samples(self.init_n_reps)
         generations_number = (self.config.budget - self.config.mu_) // self.config.lambda_
         for self.iteration in range(generations_number):
-            self.diversity_measure = self.calculate_diversity(self.population)
-            self.log_population(self.population)
+            self.log_population(self.population, self.iteration)
             self.next_population = []
             for _ in range(self.config.lambda_):
                 parent1, parent2 = self.choose(self.population)
@@ -157,9 +208,9 @@ class DDGA(AbstractFilterSequenceOptimization):
                 offspring_ind = Individual(self.F, offspring, self.iteration)
                 offspring_ind.add_samples(self.init_n_reps)
                 self.next_population.append(offspring_ind)
-            self.population = self.survival_selection(self.population, self.next_population, self.config.mu_)
+            self.population = self.my_survival_selection()
         self.population.sort(key=lambda ind: ind.obj_value())
-        self.log_population(self.population)
+        self.log_population(self.population, self.iteration)
         return self.population[0]
 
 
@@ -195,7 +246,6 @@ class DDOPLL(AbstractFilterSequenceOptimization):
 
 
 def run_optimization(config: Config):
-    config.validate()
     PFR = create_profiled_obj_fun_for_reduced_space(config)
     global logger
     utils.logger.log_config(config)
@@ -218,54 +268,13 @@ def run_optimization(config: Config):
 
 
 def main():
-    dc = Config()
+    config = Config()
     parser = argparse.ArgumentParser(description='Runs optimization of the function by SRON with configuration')
-    parser.add_argument('-i', '--algorithm_info', help='Information of the optimization algorithm', default=dc.algorithm_info)
-    parser.add_argument('-r', '--n_reps', help='Number of resampling per point', type=int, default=dc.n_reps)
-    parser.add_argument('-m', '--mu', help='Number of parents in EA', type=int, default=dc.mu_)
-    parser.add_argument('-l', '--lambda_', help='Number of offspring in EA', type=int, default=dc.lambda_)
-    parser.add_argument('-d0', '--d0_method', help='Distance between filters', default=dc.d0_method)
-    parser.add_argument('-d1', '--d1_method', help='Distance between sequences of filters', default=dc.d1_method)
-    parser.add_argument('--mu_explore', help='Number of parents in UMDA during exploration', type=int, default=dc.mu_explore)
-    parser.add_argument('--lambda_explore', help='Number of offspring in UMDA during exploration', type=int, default=dc.lambda_explore)
-    parser.add_argument('--budget_explore', help='Max number of distance evals during exploration', type=int, default=dc.budget_explore)
-    parser.add_argument('--mu_mutation', help='Number of parents in UMDA during mutation', type=int, default=dc.mu_mutation)
-    parser.add_argument('--lambda_mutation', help='Number of offspring in UMDA during mutation', type=int, default=dc.lambda_mutation)
-    parser.add_argument('--budget_mutation', help='Max number of distances evals during mutation', type=int, default=dc.budget_mutation)
-    parser.add_argument('--seq_length', help='Target length of the sequence of filters', type=int, default=dc.seq_length)
-    parser.add_argument('--log_distr', help='Flag to print distribution for every generation in UMDA', type=bool, default=dc.is_log_distr_umda)
-    parser.add_argument('-o', '--dd_mutation', help='Distance-Driven mutation operator internal optimization', type=str, default=dc.dd_mutation,
-                                choices=Config.supported_dd_mutations())
-    parser.add_argument('-b', '--budget', help='Max number of obj function evals', type=int, default=dc.budget)
-    required_named = parser.add_argument_group('required named arguments')
-    required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True,
-                                choices=Config.implemented_algorithms())
-    required_named.add_argument('-f', '--folder_name', help='Name of the folder with logs', required=True)
-    required_named.add_argument('-n', '--n_segms', help='Number of segments', type=int, required=True)
-    required_named.add_argument('--instance', help='Instance number', type=int, required=True)
+    config.add_cml_args(parser)
     args = parser.parse_args()
-
-    run_optimization(
-        Config(algorithm=args.algorithm,
-               algorithm_info=args.algorithm_info,
-               folder_name=args.folder_name,
-               n_segms=args.n_segms,
-               n_reps=args.n_reps,
-               mu_=args.mu,
-               lambda_=args.lambda_,
-               budget=args.budget,
-               d0_method=args.d0_method,
-               d1_method=args.d1_method,
-               mu_explore=args.mu_explore,
-               lambda_explore=args.lambda_explore,
-               budget_explore=args.budget_explore,
-               mu_mutation=args.mu_mutation,
-               lambda_mutation=args.lambda_mutation,
-               budget_mutation=args.budget_mutation,
-               seq_length=args.seq_length,
-               is_log_distr_umda=args.log_distr,
-               dd_mutation=args.dd_mutation,
-               instance=args.instance))
+    for k, v in vars(args).items():
+        setattr(config, k, v)
+    run_optimization(config)
     
 
 if __name__ == '__main__':
