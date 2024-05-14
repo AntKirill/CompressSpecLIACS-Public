@@ -52,7 +52,7 @@ def main(neighbours_method):
         x = utils.generate_random_solution(RDIM, 4374)
         with open(os.path.join(neighbours_root, f'group_{i}.csv'), 'w') as file:
             print('parent', *dim_reducer.to_original(x), file=file)
-            neighs = generate_neighbours(x)
+            neighs = generate_neighbours(x, neighbours_method)
             print(len(neighs))
             for j, neigh in enumerate(neighs):
                 print(f'neighbour_{j}', *dim_reducer.to_original(neigh), file=file)
