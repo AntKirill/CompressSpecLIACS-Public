@@ -7,7 +7,7 @@ import numpy as np
 import sys
 
 
-T = 6
+T = 32
 M = 100
 K = T
 RDIM = 16
