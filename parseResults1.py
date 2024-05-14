@@ -26,10 +26,10 @@ def main(dir):
     df = read_data_frame(dir)
     M = max(df['evaluations'])
     with open(os.path.join(dir, 'processed.csv'), 'w') as file:
-        print('iteration', 'mean', 'std', file=file)
+        print('iteration', 'mean', 'std', 'cnt', file=file)
         for i in range(1, M + 1):
             vals = df.loc[df['evaluations'] == i]['raw_y']
-            print(i, np.mean(vals), np.std(vals), file=file)
+            print(i, np.mean(vals), np.std(vals), len(vals), file=file)
 
 
 if __name__ == '__main__':
