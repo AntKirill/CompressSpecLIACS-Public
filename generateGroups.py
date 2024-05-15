@@ -45,7 +45,7 @@ def main(neighbours_method):
         raise ValueError(f'No such method {neighbours_method}')
     experiment_root = './'
 
-    neighbours_root = os.path.join(experiment_root, f'groups_{neighbours_method}')
+    neighbours_root = os.path.join(experiment_root, f'groups_{neighbours_method}_3')
     os.makedirs(neighbours_root, exist_ok=True)
     dim_reducer = utils.SegmentsDimReduction(640, RDIM)
     for i in range(T):
