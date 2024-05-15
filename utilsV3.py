@@ -156,6 +156,10 @@ def findExtremeDist(x, matrix_sorted_rows, dist, extreme_str, mutator, d0_type, 
         return 1.3390909280042163e-07
     if d0_type == '2' and d1_type == 'kirill' and len(x) == 16 and extreme_str == 'max':
         return 0.0922
+    if d0_type == '3' and d1_type == 'kirill' and len(x) == 16 and extreme_str == 'min':
+        return 4.017905652392746e-08
+    if d0_type == '3' and d1_type == 'kirill' and len(x) == 16 and extreme_str == 'max':
+        return 6.107193554680426
     if extreme_str == 'min':
         pos, min_dist, arg_min_dist = None, float("inf"), None
         for i, xi in enumerate(x):
@@ -166,7 +170,7 @@ def findExtremeDist(x, matrix_sorted_rows, dist, extreme_str, mutator, d0_type, 
         x1[pos] = arg_min_dist
         return dist(x, x1)
     elif extreme_str == 'max':
-        x1 = utils.generate_random_solution(len(x), L)
+        x1 = utils.generate_random_solution(len(x), 4374)
         d = dist(x, x1)
         cnt = 0
         max_d, arg_max_d = d, x1
@@ -181,6 +185,7 @@ def findExtremeDist(x, matrix_sorted_rows, dist, extreme_str, mutator, d0_type, 
                 cnt += 1
             if dxy > max_d:
                 max_d, arg_max_d = dxy, y
+            print(max_d)
         return dist(x, arg_max_d)
     else:
         raise ValueError(f'arg extreme is either min or max, but {extreme_str} is passed')
