@@ -18,7 +18,7 @@ def generate_neighbours(parent, neighbours_method):
         return neighbors.generate_single_comp_changes(parent, RDIM, K)
     elif neighbours_method == 'dist_ea':
         config = utilsV3.Config()
-        config.d0_method = '2'
+        config.d0_method = '3'
         config.d1_method = 'kirill'
         D = utilsV3.CriteriaD()
         F = utilsV3.CriteriaF(D)
