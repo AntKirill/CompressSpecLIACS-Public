@@ -87,7 +87,7 @@ class MyLogger:
             if self.verbose:
                 print(f'Logging to {self.folder_name}')
         with open(self.log_populations_full_path, 'a') as file:
-            print('Best so far:', min(obj_values), flush=True)
+            print('Best-so-far (pop):', min(obj_values), flush=True)
             for sample_size, number, x, value, pvalue in zip(sample_sizes, pop_numbers, genotypes, obj_values, pvalues):
                 print(value, sample_size, cur_pop_number, number, pvalue, diversity, *x, sep=' ', file=file)
 
@@ -174,6 +174,7 @@ class MyObjectiveFunctionWrapper:
             self.min_distance = distance
             self.arg_min = x
             self.eval_min = self.cnt_eval
+            print('Best-so-far:', self.min_distance)
         for l in self.my_loggers:
             l.log(self.cnt_eval, x, distance, self.eval_min,
                   self.arg_min, self.min_distance)
