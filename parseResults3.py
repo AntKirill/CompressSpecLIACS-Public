@@ -6,6 +6,11 @@ import utils
 import utilsV3
 
 
+# 
+# Create archive of high-performing solutions with pairwise distance greater than TH_DIST
+# Consideres all solutions logged to populations.csv files in the given experiment_root
+#
+
 def read_data_frame(experiment_root, th_value):
     designs = []
     obj_values = []

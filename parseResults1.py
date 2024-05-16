@@ -3,6 +3,10 @@ import os
 import pandas as pd
 import numpy as np
 
+# 
+# Parses all files with all evals in the given experiment_root
+# Extracts information about the whole experiment
+#
 
 def read_data_frame(dir):
     everyevals = []
@@ -26,10 +30,14 @@ def main(dir):
     df = read_data_frame(dir)
     M = max(df['evaluations'])
     with open(os.path.join(dir, 'processed.csv'), 'w') as file:
-        print('iteration', 'mean', 'std', 'cnt', file=file)
+        argmin_components = [f'argmin_x{i}' for i in range(640)]
+        print('iteration', 'mean', 'std', 'cnt', 'min', *argmin_components, file=file)
         for i in range(1, M + 1):
-            vals = df.loc[df['evaluations'] == i]['raw_y']
-            print(i, np.mean(vals), np.std(vals), len(vals), file=file)
+            lc = df.loc[df['evaluations'] == i]
+            vals = lc['raw_y'].to_numpy()
+            argmin = np.argmin(vals)
+            best = lc.loc[:, 'x0':'x639'].iloc[argmin].to_numpy(dtype=int) #.loc[:, 'x0':'x639']
+            print(i, np.mean(vals), np.std(vals), len(vals), np.min(vals), *best, file=file)
 
 
 if __name__ == '__main__':

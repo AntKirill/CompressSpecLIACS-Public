@@ -3,6 +3,9 @@ import os
 import pandas as pd
 import numpy as np
 
+# 
+# Parses file population.csv in the given experiment_root
+#
 
 def read_data_frame(experiment_root):
     dfs = []
