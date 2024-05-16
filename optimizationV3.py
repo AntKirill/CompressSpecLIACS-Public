@@ -89,6 +89,8 @@ class AbstractFilterSequenceOptimization(ABC):
         return d / (2 * len(population))
     
     def log_population(self, population, cur_pop_number):
+        if not hasattr(utils, 'logger'):
+            return
         self.diversity_measure = self.calculate_diversity(self.population)
         pop_numbers, xs, values, sizes, pvalues = [], [], [], [], []
         for ind in population:
@@ -219,6 +221,15 @@ class DDGA(AbstractFilterSequenceOptimization):
         self.log_population(self.population, self.iteration)
         return self.population[0]
 
+
+class DDES(DDGA):
+    def choose(self, population):
+        selected = np.random.choice(population, 1, replace=False)
+        return selected[0], None        
+
+    def crossover(self, parent1, parent2, c=0.5):
+        return np.copy(parent1.x)
+        
 
 class DDOPLL(AbstractFilterSequenceOptimization):
     def __call__(self, initial=None):
@@ -387,7 +398,7 @@ def run_optimization(config: Config):
     PFR = create_profiled_obj_fun_for_reduced_space(config)
     global logger
     utils.logger.log_config(config)
-    if config.algorithm == 'dd-ga' or config.algorithm == 'dd-opll' or config.algorithm == 'dd-ls':
+    if config.algorithm.startswith('dd-'):
         dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
         dist_matrix_sorted = sort_dist_matrix(dist_matrix)
         dist = utils.create_distance(PFR, dist_matrix, config.d1_method)
@@ -397,6 +408,8 @@ def run_optimization(config: Config):
             opt = DDOPLL(PFR, dist_matrix_sorted, dist, config)
         elif config.algorithm == 'dd-ls':
             opt = DDLocalSearch(PFR, dist_matrix_sorted, dist, config)
+        elif config.algorithm == 'dd-es':
+            opt = DDES(PFR, dist_matrix_sorted, dist, config)
         opt()
     elif config.algorithm == 'umda':
         umda_Zn_minimization(config.n_segms, PFR.instrument.filterlibrarysize,
