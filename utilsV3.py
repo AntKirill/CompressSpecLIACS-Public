@@ -21,14 +21,15 @@ from dataclasses_json import dataclass_json
 
 
 class CriteriaD:
-    def __init__(self):
+    def __init__(self, extended=True):
         instrument_settings = instrumentsimulator.InstrumentSettings()
         self.instrument = instrumentsimulator.InstrumentSimulator(instrument_settings)
         self.search_space_dim = 640
         self.x = None
+        self.extended = extended
 
     def __call__(self, original):
-        _, value, = self.instrument.simulateMeasurement(original, nCH4=2000, albedo=0.15, sza=70, n=1, extended=True, verbose=False)
+        _, value, = self.instrument.simulateMeasurement(original, nCH4=2000, albedo=0.15, sza=70, n=1, extended=self.extended, verbose=False)
         return value
 
 
@@ -245,6 +246,8 @@ class Config:
     significance: float = 0.05
     sample_inc: int = 100
     mut_rate: float = 1
+    min_distance_scaling: float = 100
+    is_extended: bool = True # In the earlier experiments we used False
 
     @staticmethod
     def implemented_algorithms():
@@ -282,6 +285,8 @@ class Config:
         parser.add_argument('--significance', help='Maximum pvalue in welch ttest to ensure sufficient statistical evidence in ranking', type=float, default=self.significance)
         parser.add_argument('--sample_inc', help='Incrase in the number of samples', type=int, default=self.sample_inc)
         parser.add_argument('--mut_rate', help='Mutation rate for simple EAs', type=float, default=self.mut_rate)
+        parser.add_argument('--min_distance_scaling', help='Scales the minimal found distance in the given search space', type=float, default=self.min_distance_scaling)
+        parser.add_argument('--is_extended', help='Extended model for calculation objective function', type=bool, default=self.is_extended)
         required_named = parser.add_argument_group('required named arguments')
         required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True, choices=Config.implemented_algorithms())
         required_named.add_argument('--folder_name', help='Name of the folder with logs', required=True)
@@ -290,7 +295,7 @@ class Config:
 
 
 def create_profiled_obj_fun_for_reduced_space(config):
-    D = CriteriaD()
+    D = CriteriaD(config.is_extended)
     F = CriteriaF(D)
     PF = ProfiledF(F, config)
     PFR = ReducedDimObjFunSRON(16, PF)
