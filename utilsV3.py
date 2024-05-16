@@ -244,10 +244,11 @@ class Config:
     max_samples: int = 5000
     significance: float = 0.05
     sample_inc: int = 100
+    mut_rate: float = 1
 
     @staticmethod
     def implemented_algorithms():
-        return frozenset(['dd-ga', 'dd-opll', 'umda', 'ea-simple'])
+        return frozenset(['dd-ga', 'dd-opll', 'ea-simple', 'ea-simple-cross', 'dd-ls', 'mies', 'ngopt', 'fastga-ng', 'portfolio-ng', 'bo-ng'])
 
     @staticmethod
     def supported_dd_mutations():
@@ -280,6 +281,7 @@ class Config:
         parser.add_argument('--max_samples', help='Max number of samples per solution', type=int, default=self.max_samples)
         parser.add_argument('--significance', help='Maximum pvalue in welch ttest to ensure sufficient statistical evidence in ranking', type=float, default=self.significance)
         parser.add_argument('--sample_inc', help='Incrase in the number of samples', type=int, default=self.sample_inc)
+        parser.add_argument('--mut_rate', help='Mutation rate for simple EAs', type=float, default=self.mut_rate)
         required_named = parser.add_argument_group('required named arguments')
         required_named.add_argument('-a', '--algorithm', help='Optimization algorithm', required=True, choices=Config.implemented_algorithms())
         required_named.add_argument('--folder_name', help='Name of the folder with logs', required=True)

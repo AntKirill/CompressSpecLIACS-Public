@@ -1,6 +1,8 @@
 from utilsV3 import *
 import argparse
 from umda import umda_Zn_minimization
+import mipego
+import nevergrad as ng
 
 
 class Individual:
@@ -25,13 +27,15 @@ def ea_simple(F, config, n_segms, mu_, lambda_, is_term, init_pop=None, mut_rate
     if not init_pop:
         init_pop = []
     initial = init_pop + [utils.generate_random_solution(n_segms, L_size) for _ in range(max(0, mu_ - len(init_pop)))]
-    population = [Individual(F, ind) for ind in initial]
+    population = [Individual(F, ind, None) for ind in initial]
     for ind in population:
         ind.add_samples(config.n_reps)
     spent_budget = len(initial)
     if not mut_rate:
         mut_rate = 2./n_segms
+    population_number = 0
     while not is_term(0, spent_budget, 0):
+        print('Best-so-far:', population[0].obj_value())
         next_population = []
         for _ in range(lambda_):
             parent_num = np.random.choice(len(population), 1, replace=False)
@@ -44,12 +48,13 @@ def ea_simple(F, config, n_segms, mu_, lambda_, is_term, init_pop=None, mut_rate
             for pos in poss:
                 offspring_genotype[pos] = np.random.randint(0, L_size)
             spent_budget += 1
-            ind = Individual(F, offspring_genotype)
+            ind = Individual(F, offspring_genotype, population_number)
             ind.add_samples(config.n_reps)
             next_population.append(ind)
         all_population = np.concatenate((population, next_population)).tolist()
         all_population.sort(key=lambda ind: ind.obj_value())
         population = all_population[:mu_]
+        population_number += 1
     population.sort(key=lambda ind: ind.obj_value())
     return population[0]
 
@@ -73,7 +78,8 @@ class AbstractFilterSequenceOptimization(ABC):
         self.MAXSAMPLES = config.max_samples
         self.MAXSIGNIFICANCE = config.significance
         self.SAMPLESINC = config.sample_inc
-        utils.logger.watch(self, ['Diversity', 'iteration'])
+        if hasattr(utils, 'logger'):
+            utils.logger.watch(self, ['Diversity', 'iteration'])
 
     def calculate_diversity(self, population):
         d = 0
@@ -245,11 +251,143 @@ class DDOPLL(AbstractFilterSequenceOptimization):
         return parent_ind
 
 
+class DDLocalSearch(AbstractFilterSequenceOptimization):
+    def __call__(self, initial=None):
+        self.configure_step_size_distribution()
+        if initial is None:
+            initial = utils.generate_random_solution(self.F.search_space_dim, self.F.instrument.filterlibrarysize)
+        x = initial
+        x_obj = self.F(x, self.config.n_reps)
+        print('Current best:', x_obj)
+        for iteration in range(self.config.budget):
+            y = self.ddMutation(x)
+            y_obj = self.F(y, self.config.n_reps)
+            if x_obj > y_obj:
+                x, x_obj = y, y_obj
+            print('Current best:', x_obj)
+        return x, x_obj
+
+
+class EASimple(AbstractFilterSequenceOptimization):
+    def my_crossover(self, population):
+            parent_num = np.random.choice(len(population), 1, replace=False)
+            return population[parent_num[0]].x
+
+    def __call__(self, init_pop=None):
+        L_size = self.F.instrument.filterlibrarysize
+        if not init_pop:
+            init_pop = []
+        initial = init_pop + [utils.generate_random_solution(self.config.n_segms, L_size) for _ in range(max(0, self.config.mu_ - len(init_pop)))]
+        population = [Individual(self.F, ind, None) for ind in initial]
+        for i, ind in enumerate(population):
+            ind.add_samples(self.config.n_reps)
+            print(f'Obj value init {i}:', ind.obj_value())
+        spent_budget = len(initial)
+        mut_rate = self.config.mut_rate/self.config.n_segms
+        population_number = 0
+        while spent_budget < self.config.budget:
+            print('Best-so-far:', population[0].obj_value())
+            next_population = []
+            for _ in range(self.config.lambda_):
+                cparent = self.my_crossover(population)
+                num_pos = RandomEngine.sample_Binomial(len(cparent), mut_rate)
+                if num_pos == 0:
+                    num_pos = 1
+                poss = np.random.choice(len(cparent), num_pos, replace=False)
+                offspring_genotype = np.copy(cparent)
+                for pos in poss:
+                    offspring_genotype[pos] = np.random.randint(0, L_size)
+                spent_budget += 1
+                ind = Individual(self.F, offspring_genotype, population_number)
+                ind.add_samples(self.config.n_reps)
+                next_population.append(ind)
+            all_population = np.concatenate((population, next_population)).tolist()
+            all_population.sort(key=lambda ind: ind.obj_value())
+            population = all_population[:self.config.mu_]
+            population_number += 1
+        population.sort(key=lambda ind: ind.obj_value())
+        return population[0]
+    
+
+class EASimpleWithCrossover(EASimple):
+    def my_crossover(self, population):
+        p1, p2 = super().choose(population)
+        return super().crossover(p1, p2)
+    
+
+class BO(AbstractFilterSequenceOptimization):
+    def __call__(self, initial=None):
+        f = lambda x: self.F(x, self.config.n_reps)
+        I = mipego.OrdinalSpace([0, self.L - 1]) * self.config.n_segms
+        model = mipego.RandomForest(levels=I.levels)
+        doe_size = 5
+        opt = mipego.NoisyBO(
+            search_space=I,
+            obj_fun=f,
+            model=model,
+            max_FEs=self.config.budget,
+            DoE_size=doe_size,  # the initial DoE size
+            # eval_type='dict',
+            acquisition_fun='MGFI',
+            acquisition_par={'t': 2},
+            n_job=2,  # number of processes
+            n_point=2,  # number of the candidate solution proposed in each iteration
+            verbose=True  # turn this off, if you prefer no output
+        )
+        xopt, fopt, stop_dict = opt.run()
+        return xopt, fopt
+    
+
+class MIES(AbstractFilterSequenceOptimization):
+    def __call__(self, initial=None):
+        f = lambda x: self.F(x, self.config.n_reps)
+        I = mipego.OrdinalSpace([0, self.L - 1]) * self.config.n_segms
+        mies = mipego.optimizer.mies.MIES(
+            search_space=I,
+            obj_func=f,
+            max_eval=self.config.budget,
+            mu_=self.config.mu_,
+            lambda_=self.config.lambda_,
+            verbose=True)
+        xopt, fopt, stop_dict = mies.optimize()
+        return xopt, fopt
+
+
+class NGOptWrapper(AbstractFilterSequenceOptimization):
+    def create_optimizer(self, arg):
+        return ng.optimizers.NGOpt(parametrization=arg, budget=self.config.budget)
+
+    def __call__(self, initial=None):
+        f = lambda x: self.F(x, self.config.n_reps)
+        arg1 = ng.p.Choice([i for i in range(self.F.instrument.filterlibrarysize)], repetitions=self.config.n_segms)
+        optimizer = self.create_optimizer(arg1)
+        recommendation = optimizer.minimize(f)
+        return recommendation
+    
+
+class FastGANevergrad(NGOptWrapper):
+    def create_optimizer(self, arg):
+        print('Fast GA')
+        return ng.optimizers.DoubleFastGADiscreteOnePlusOne(parametrization=arg, budget=self.config.budget)
+
+
+class PortfolioNevergrad(NGOptWrapper):
+    def create_optimizer(self, arg):
+        print('RecombiningPortfolioOptimisticNoisyDiscreteOnePlusOne')
+        return ng.optimizers.RecombiningPortfolioOptimisticNoisyDiscreteOnePlusOne(parametrization=arg, budget=self.config.budget)
+
+
+class BONevergrad(NGOptWrapper):
+    def create_optimizer(self, arg):
+        print('BO-NG')
+        return ng.optimizers.BayesOptimBO(parametrization=arg, budget=self.config.budget)
+
+
 def run_optimization(config: Config):
     PFR = create_profiled_obj_fun_for_reduced_space(config)
     global logger
     utils.logger.log_config(config)
-    if config.algorithm == 'dd-ga' or config.algorithm == 'dd-opll':
+    if config.algorithm == 'dd-ga' or config.algorithm == 'dd-opll' or config.algorithm == 'dd-ls':
         dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
         dist_matrix_sorted = sort_dist_matrix(dist_matrix)
         dist = utils.create_distance(PFR, dist_matrix, config.d1_method)
@@ -257,14 +395,35 @@ def run_optimization(config: Config):
             opt = DDGA(PFR, dist_matrix_sorted, dist, config)
         elif config.algorithm == 'dd-opll':
             opt = DDOPLL(PFR, dist_matrix_sorted, dist, config)
+        elif config.algorithm == 'dd-ls':
+            opt = DDLocalSearch(PFR, dist_matrix_sorted, dist, config)
         opt()
     elif config.algorithm == 'umda':
         umda_Zn_minimization(config.n_segms, PFR.instrument.filterlibrarysize,
                              config.mu_, config.lambda_, PFR,
                              lambda i1, s, i2: s > config.budget, config.is_log_distr_umda)
     elif config.algorithm == 'ea-simple':
-        solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)
-        print(solution.obj_value)
+        # solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)
+        opt = EASimple(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'ea-simple-cross':
+        opt = EASimpleWithCrossover(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'mies':
+        opt = MIES(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'ngopt':
+        opt = NGOptWrapper(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'fastga-ng':
+        opt = FastGANevergrad(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'portfolio-ng':
+        opt = PortfolioNevergrad(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'bo-ng':
+        opt = BONevergrad(PFR, None, None, config)
+        opt()
 
 
 def main():
