@@ -18,11 +18,14 @@ def main(experiment_root):
                 for row in file:
                     sp = row.split(' ')
                     selection = [int(k) for k in sp[0:640]]
-                    samples = np.array([float(k) for k in sp[640:]])**2
+                    samples = np.array([float(k) for k in sp[640:]])
                     n = len(set(selection))
                     design_ids.append(id)
                     designs_data.append([id, n, samples])
                     nums.append(n)
+    with open(os.path.join(experiment_root, 'merged_samples'), 'w') as file:
+        for d in designs_data:
+            print(d[0], d[1], *d[2], file=file)
 
     fig = plt.figure()
     ax = plt.gca()
