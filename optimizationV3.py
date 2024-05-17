@@ -3,6 +3,7 @@ import argparse
 from umda import umda_Zn_minimization
 import mipego
 import nevergrad as ng
+import os
 
 
 class Individual:
@@ -394,6 +395,57 @@ class BONevergrad(NGOptWrapper):
         return ng.optimizers.BayesOptimBO(parametrization=arg, budget=self.config.budget)
 
 
+class UMDA(AbstractFilterSequenceOptimization):
+    def log_distribution(self, p, gen_number):
+        with open(os.path.join(utils.logger.folder_name, 'umda_distr.txt'), 'a') as f:
+            print(f'Generation {gen_number}, sz x crd', file=f)
+            for i in range(len(p)):
+                print(*p[i], sep=' ', file=f)
+            print('', flush=True, file=f)
+
+    def optimize(self, sz, crd, mu_, lambda_, f, term, is_log_p=False):
+        p = np.full((sz, crd), 1. / crd)
+        lb = 1 / ((crd - 1) * sz)
+        ub = 1. - lb
+        iteration = 0
+        spent_budget = 0
+        best_fitness = float("inf")
+        sol = None
+        gen_number = 1
+        while True:
+            if is_log_p:
+                self.log_distribution(p, gen_number)
+            if term(iteration, spent_budget, best_fitness):
+                break
+            pop = []
+            for i in range(lambda_):
+                x = np.zeros(sz, dtype=int)
+                for j in range(sz):
+                    x[j] = RandomEngine.sample_discrete_dist(p[j])
+                x_ind = Individual(f, x, gen_number)
+                x_ind.add_samples(self.config.n_reps)
+                spent_budget += 1
+                pop.append(x_ind)
+            pop.sort(key=lambda ind: ind.obj_value())
+            if pop[0].obj_value() < best_fitness:
+                sol = pop[0]
+                best_fitness = pop[0].obj_value()
+            print(best_fitness)
+            for i in range(sz):
+                cnt = np.zeros(crd, dtype=int)
+                for j in range(mu_):
+                    cnt[pop[j].x[i]] += 1
+                for j in range(crd):
+                    p[i][j] = min(max(cnt[j] / mu_, lb), ub)
+            gen_number += 1
+        return sol.x, sol.obj_value()
+    
+    def __call__(self, initial=None):
+        return self.optimize(self.config.n_segms, self.L,
+                                    self.config.mu_, self.config.lambda_, self.F,
+                                    lambda i1, s, i2: s > self.config.budget, self.config.is_log_distr_umda)
+
+
 def run_optimization(config: Config):
     PFR = create_profiled_obj_fun_for_reduced_space(config)
     global logger
@@ -412,9 +464,8 @@ def run_optimization(config: Config):
             opt = DDES(PFR, dist_matrix_sorted, dist, config)
         opt()
     elif config.algorithm == 'umda':
-        umda_Zn_minimization(config.n_segms, PFR.instrument.filterlibrarysize,
-                             config.mu_, config.lambda_, PFR,
-                             lambda i1, s, i2: s > config.budget, config.is_log_distr_umda)
+        opt = UMDA(PFR, None, None, config)
+        opt()
     elif config.algorithm == 'ea-simple':
         # solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)
         opt = EASimple(PFR, None, None, config)

@@ -251,7 +251,7 @@ class Config:
 
     @staticmethod
     def implemented_algorithms():
-        return frozenset(['dd-ga', 'dd-opll', 'ea-simple', 'ea-simple-cross', 'dd-ls', 'mies', 'ngopt', 'fastga-ng', 'portfolio-ng', 'bo-ng', 'dd-es'])
+        return frozenset(['dd-ga', 'dd-opll', 'ea-simple', 'ea-simple-cross', 'dd-ls', 'mies', 'ngopt', 'fastga-ng', 'portfolio-ng', 'bo-ng', 'dd-es', 'umda'])
 
     @staticmethod
     def supported_dd_mutations():
