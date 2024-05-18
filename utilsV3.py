@@ -298,5 +298,5 @@ def create_profiled_obj_fun_for_reduced_space(config):
     D = CriteriaD(config.is_extended)
     F = CriteriaF(D)
     PF = ProfiledF(F, config)
-    PFR = ReducedDimObjFunSRON(16, PF)
+    PFR = ReducedDimObjFunSRON(config.n_segms, PF)
     return PFR
