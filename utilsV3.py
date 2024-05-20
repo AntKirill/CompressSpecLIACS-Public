@@ -251,7 +251,7 @@ class Config:
 
     @staticmethod
     def implemented_algorithms():
-        return frozenset(['dd-ga', 'dd-opll', 'ea-simple', 'ea-simple-cross', 'dd-ls', 'mies', 'ngopt', 'fastga-ng', 'portfolio-ng', 'bo-ng', 'dd-es', 'umda'])
+        return frozenset(['dd-ga', 'dd-opll', 'ea-simple', 'ea-simple-cross', 'dd-ls', 'mies', 'ngopt', 'fastga-ng', 'portfolio-ng', 'bo-ng', 'dd-es', 'umda', 'umda1'])
 
     @staticmethod
     def supported_dd_mutations():
@@ -275,7 +275,7 @@ class Config:
         parser.add_argument('--lambda_mutation', help='Number of offspring in UMDA during mutation', type=int, default=self.lambda_mutation)
         parser.add_argument('--budget_mutation', help='Max number of distances evals during mutation', type=int, default=self.budget_mutation)
         parser.add_argument('--seq_length', help='Target length of the sequence of filters', type=int, default=self.seq_length)
-        parser.add_argument('--log_distr', help='Flag to print distribution for every generation in UMDA', type=bool, default=self.is_log_distr_umda)
+        parser.add_argument('--is_log_distr_umda', help='Flag to print distribution for every generation in UMDA', type=bool, default=self.is_log_distr_umda)
         parser.add_argument('--dd_mutation', help='Distance-Driven mutation operator internal optimization', type=str, default=self.dd_mutation, 
                             choices=Config.supported_dd_mutations())
         parser.add_argument('--budget', help='Max number of obj function evals', type=int, default=self.budget)

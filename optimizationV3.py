@@ -403,26 +403,34 @@ class UMDA(AbstractFilterSequenceOptimization):
                 print(*p[i], sep=' ', file=f)
             print('', flush=True, file=f)
 
-    def optimize(self, sz, crd, mu_, lambda_, f, term, is_log_p=False):
-        p = np.full((sz, crd), 1. / crd)
-        lb = 1 / ((crd - 1) * sz)
-        ub = 1. - lb
-        iteration = 0
+    def sample_from_distribution(self, p):
+        x = np.zeros(len(p), dtype=int)
+        for j in range(len(p)):
+            x[j] = RandomEngine.sample_discrete_dist(p[j])
+        return x
+
+    def update_distribution(self, p, pop):
+        for i in range(len(p)):
+            cnt = np.zeros(self.L, dtype=int)
+            for j in range(self.config.mu_):
+                cnt[pop[j].x[i]] += 1
+            for j in range(self.L):
+                p[i][j] = min(max(cnt[j] / self.config.mu_, self.lb), self.ub)
+
+    def optimize(self):
         spent_budget = 0
         best_fitness = float("inf")
         sol = None
         gen_number = 1
         while True:
-            if is_log_p:
-                self.log_distribution(p, gen_number)
-            if term(iteration, spent_budget, best_fitness):
+            if self.config.is_log_distr_umda:
+                self.log_distribution(self.p, gen_number)
+            if spent_budget >= self.config.budget:
                 break
             pop = []
-            for i in range(lambda_):
-                x = np.zeros(sz, dtype=int)
-                for j in range(sz):
-                    x[j] = RandomEngine.sample_discrete_dist(p[j])
-                x_ind = Individual(f, x, gen_number)
+            for i in range(self.config.lambda_):
+                x = self.sample_from_distribution(self.p)
+                x_ind = Individual(self.F, x, gen_number)
                 x_ind.add_samples(self.config.n_reps)
                 spent_budget += 1
                 pop.append(x_ind)
@@ -431,19 +439,43 @@ class UMDA(AbstractFilterSequenceOptimization):
                 sol = pop[0]
                 best_fitness = pop[0].obj_value()
             print(best_fitness)
-            for i in range(sz):
-                cnt = np.zeros(crd, dtype=int)
-                for j in range(mu_):
-                    cnt[pop[j].x[i]] += 1
-                for j in range(crd):
-                    p[i][j] = min(max(cnt[j] / mu_, lb), ub)
+            self.update_distribution(self.p, pop)
             gen_number += 1
         return sol.x, sol.obj_value()
     
     def __call__(self, initial=None):
-        return self.optimize(self.config.n_segms, self.L,
-                                    self.config.mu_, self.config.lambda_, self.F,
-                                    lambda i1, s, i2: s > self.config.budget, self.config.is_log_distr_umda)
+        self.p = np.full((self.config.n_segms, self.L), 1. / self.L)
+        self.lb = 1 / ((self.L - 1) * self.config.n_segms)
+        self.ub = 1. - self.lb
+        return self.optimize()
+    
+
+class UMDA1(UMDA):
+    def log_distribution(self, p, gen_number):
+        with open(os.path.join(utils.logger.folder_name, 'umda_distr.txt'), 'a') as f:
+            print(f'Generation {gen_number}, sz', file=f)
+            print(*p, sep=' ', file=f, flush=True)
+
+    def sample_from_distribution(self, p):
+        x = np.zeros(self.config.n_segms, dtype=int)
+        for j in range(len(x)):
+            x[j] = RandomEngine.sample_discrete_dist(p)
+        return x
+
+    def update_distribution(self, p, pop):
+        cnt = np.zeros(self.L, dtype=int)
+        sz = len(pop[0].x)
+        for i in range(sz):
+            for j in range(self.config.mu_):
+                cnt[pop[j].x[i]] += 1
+        for j in range(self.L):
+            p[j] = min(max(cnt[j] / self.config.mu_ / sz, self.lb), self.ub)
+
+    def __call__(self, initial=None):
+        self.p = np.full(self.L, 1./self.L)
+        self.lb = 1 / ((self.L - 1) * self.config.n_segms)
+        self.ub = 1. - self.lb        
+        return self.optimize()
 
 
 def run_optimization(config: Config):
@@ -465,6 +497,9 @@ def run_optimization(config: Config):
         opt()
     elif config.algorithm == 'umda':
         opt = UMDA(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'umda1':
+        opt = UMDA1(PFR, None, None, config)
         opt()
     elif config.algorithm == 'ea-simple':
         # solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)
