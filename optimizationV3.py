@@ -65,16 +65,16 @@ def WelchTTestPvalue(ind1, ind2):
 
 
 class AbstractFilterSequenceOptimization(ABC):
-    def __init__(self, F, dist_matrix_sorted, dist, config):
+    def __init__(self, F, dist_matrix_sorted, dist, config, seq_length=None, L=None):
         self.F = F
-        self.seq_length = F.search_space_dim
-        self.L = F.instrument.filterlibrarysize
+        self.seq_length = F.search_space_dim if seq_length is None else seq_length
+        self.L = F.instrument.filterlibrarysize if L is None else L
         self.dist_matrix_sorted = dist_matrix_sorted
         self.dist = dist
         self.config = config
         self.diversity_measure = None
         self.init_n_reps = config.n_reps
-        self.dim_reducer = utils.SegmentsDimReduction(F.of.search_space_dim, self.seq_length)
+        self.dim_reducer = utils.SegmentsDimReduction(self.config.seq_length, self.seq_length)
         self.mean = 0.1
         self.MAXSAMPLES = config.max_samples
         self.MAXSIGNIFICANCE = config.significance
@@ -176,7 +176,7 @@ class AbstractFilterSequenceOptimization(ABC):
         if self.config.dd_mutation == 'ea':
             self.mutator = DDMutationEA(self.dist, self.dist_matrix_sorted)
         else:
-            self.mutator = DDMutationUMDA(self.dist)
+            self.mutator = DDMutationUMDA(self.dist, self.L)
         x = utils.generate_random_solution(self.seq_length, self.L)
         self.dMin = findExtremeDist(x, self.dist_matrix_sorted, self.dist, 'min', self.mutator, self.config.d0_method, self.config.d1_method)
         self.dMax = findExtremeDist(x, self.dist_matrix_sorted, self.dist, 'max', self.mutator, self.config.d0_method, self.config.d1_method)
@@ -284,34 +284,37 @@ class EASimple(AbstractFilterSequenceOptimization):
     def my_crossover(self, population):
             parent_num = np.random.choice(len(population), 1, replace=False)
             return population[parent_num[0]].x
+    
+    def my_mutation(self, cparent, mut_rate):
+        num_pos = RandomEngine.sample_Binomial(len(cparent), mut_rate)
+        if num_pos == 0:
+            num_pos = 1
+        poss = np.random.choice(len(cparent), num_pos, replace=False)
+        offspring_genotype = np.copy(cparent)
+        for pos in poss:
+            offspring_genotype[pos] = np.random.randint(0, self.L)
+        return offspring_genotype
 
     def __call__(self, init_pop=None):
-        L_size = self.F.instrument.filterlibrarysize
         if not init_pop:
             init_pop = []
-        initial = init_pop + [utils.generate_random_solution(self.config.n_segms, L_size) for _ in range(max(0, self.config.mu_ - len(init_pop)))]
+        initial = init_pop + [utils.generate_random_solution(self.config.n_segms, self.L) for _ in range(max(0, self.config.mu_ - len(init_pop)))]
         population = [Individual(self.F, ind, None) for ind in initial]
         for i, ind in enumerate(population):
             ind.add_samples(self.config.n_reps)
-            print(f'Obj value init {i}:', ind.obj_value())
+            print(f'Obj value init {i}:', ind.obj_value(), 'n diff', len(set(ind.x)))
         spent_budget = len(initial)
-        mut_rate = self.config.mut_rate/self.config.n_segms
+        self.mut_rate = self.config.mut_rate/self.config.n_segms
         population_number = 0
         while spent_budget < self.config.budget:
-            print('Best-so-far:', population[0].obj_value())
+            print('Best-so-far:', population[0].obj_value(), 'n diff', len(set(population[0].x)))
             next_population = []
             for _ in range(self.config.lambda_):
                 cparent = self.my_crossover(population)
-                num_pos = RandomEngine.sample_Binomial(len(cparent), mut_rate)
-                if num_pos == 0:
-                    num_pos = 1
-                poss = np.random.choice(len(cparent), num_pos, replace=False)
-                offspring_genotype = np.copy(cparent)
-                for pos in poss:
-                    offspring_genotype[pos] = np.random.randint(0, L_size)
-                spent_budget += 1
+                offspring_genotype = self.my_mutation(cparent, self.mut_rate)
                 ind = Individual(self.F, offspring_genotype, population_number)
                 ind.add_samples(self.config.n_reps)
+                spent_budget += 1
                 next_population.append(ind)
             all_population = np.concatenate((population, next_population)).tolist()
             all_population.sort(key=lambda ind: ind.obj_value())
@@ -478,6 +481,64 @@ class UMDA1(UMDA):
         return self.optimize()
 
 
+class UMDA2Dist(UMDA):
+    def log_distribution(self, p, gen_number):
+        with open(os.path.join(utils.logger.folder_name, 'umda_distr.txt'), 'a') as f:
+            print(f'Generation {gen_number}, sz', file=f)
+            print(*p, sep=' ', file=f, flush=True)
+
+    def sample_from_distribution(self, p):
+        x = np.zeros(self.config.n_segms, dtype=int)
+        d = np.full(self.L, 1.)
+        p1 = np.copy(p)
+        for i in range(len(x)):
+            for j in range(self.L):
+                d[j] = sum(self.dist_matrix_sorted[j][x[k]] for k in range(i))
+            for k in range(i):
+                d[x[k]] = 0
+            if i == 0:
+                d.fill(1.)
+            C = 1/sum(p[j]*d[j] for j in range(len(p)))
+            for j in range(len(p1)):
+                p1[j] = C*p[j]*d[j]
+            sampled = RandomEngine.sample_discrete_dist(p1)
+            x[i] = sampled
+        # print('Sampled', *x)
+        return x
+
+    def update_distribution(self, p, pop):
+        cnt = np.zeros(self.L, dtype=int)
+        sz = len(pop[0].x)
+        for i in range(sz):
+            for j in range(self.config.mu_):
+                cnt[pop[j].x[i]] += 1
+        for j in range(self.L):
+            p[j] = min(max(cnt[j] / self.config.mu_ / sz, self.lb), self.ub)
+
+    def __call__(self, initial=None):
+        self.p = np.full(self.L, 1./self.L)
+        self.lb = 1 / ((self.L - 1) * self.config.n_segms)
+        self.ub = 1. - self.lb        
+        return self.optimize()
+    
+
+class UMDA2(UMDA2Dist):
+    def sample_from_distribution(self, p):
+        x = np.zeros(self.config.n_segms, dtype=int)
+        p1 = np.copy(p)
+        d = np.full(self.L, 1.)
+        for i in range(len(x)):
+            d.fill(1.)
+            for k in range(i):
+                d[x[k]] = 0
+            C = 1/sum(p[j]*d[j] for j in range(len(p)))
+            for j in range(len(p1)):
+                p1[j] = C*p[j]*d[j]
+            x[i] = RandomEngine.sample_discrete_dist(p1)
+        # print('Sampled', *x)
+        return x
+
+
 def run_optimization(config: Config):
     PFR = create_profiled_obj_fun_for_reduced_space(config)
     global logger
@@ -500,6 +561,13 @@ def run_optimization(config: Config):
         opt()
     elif config.algorithm == 'umda1':
         opt = UMDA1(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'umda2':
+        opt = UMDA2(PFR, None, None, config) 
+        opt()
+    elif config.algorithm == 'umda2-dist':
+        dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
+        opt = UMDA2Dist(PFR, dist_matrix, None, config)
         opt()
     elif config.algorithm == 'ea-simple':
         # solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)

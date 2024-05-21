@@ -7,7 +7,6 @@ from scipy import stats
 import utils as utils
 import mylogger as mylogger
 import algorithms as algs
-import umda
 from myrandom import RandomEngine
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,6 +17,7 @@ import algorithms as algs
 import umda
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from collections import namedtuple
 
 
 class CriteriaD:
@@ -124,9 +124,45 @@ def on_reload():
     dist = utils.create_distance(PFR, dist_matrix, 'kirill')
 
 
+def umda_Zn_minimization(sz, crd, mu_, lambda_, f, term):
+    p = np.full((sz, crd), 1. / crd)
+    lb = 1 / ((crd - 1) * sz)
+    ub = 1. - lb
+    iteration = 0
+    spent_budget = 0
+    best_fitness = float("inf")
+    sol = None
+    gen_number = 1
+    NoiseFreeInd = namedtuple('NoiseFreeInd', ['genotype', 'obj_value'])
+    while True:
+        if term(iteration, spent_budget, best_fitness):
+            break
+        pop = []
+        for i in range(lambda_):
+            x = np.zeros(sz, dtype=int)
+            for j in range(sz):
+                x[j] = RandomEngine.sample_discrete_dist(p[j])
+            obj_value = f(x)
+            spent_budget += 1
+            pop.append(NoiseFreeInd(x, obj_value))
+        pop.sort(key=lambda ind: ind.obj_value)
+        if pop[0].obj_value < best_fitness:
+            sol = pop[0]
+            best_fitness = pop[0].obj_value
+        # print(best_fitness)
+        for i in range(sz):
+            cnt = np.zeros(crd, dtype=int)
+            for j in range(mu_):
+                cnt[pop[j].genotype[i]] += 1
+            for j in range(crd):
+                p[i][j] = min(max(cnt[j] / mu_, lb), ub)
+        gen_number += 1
+    return sol.genotype, sol.obj_value
+
+
 class DDMutation(ABC):
     @abstractmethod
-    def mutation(self, x):
+    def mutation(self, x, s):
         pass
 
 
@@ -140,15 +176,24 @@ class DDMutationEA(DDMutation):
     def mutation(self, x, s):
         ea = algs.PermutationSeqDistanceInverse(self.budget, 1, self.lambda_, x, self.dist_matrix_sorted, s)
         return ea(self.dist)
-
+    
 
 class DDMutationUMDA(DDMutation):
-    def __init__(self, dist):
-        self.budget = 1000
+    def __init__(self, dist, L):
+        self.my_config = Config()
+        self.my_config.mu_ = 50
+        self.my_config.lambda_ = 200
+        self.my_config.budget = 1000
         self.dist = dist
+        self.L = L
 
-    def mutaiton(self, x, s):
-        y, value = umda.umda_Zn_minimization(len(x), L, 50, 200, lambda y: abs(self.dist(y, x) - s), lambda i1, bdg, i2: bdg >= self.budget)
+    def mutation(self, x, s):
+        y, value = umda_Zn_minimization(len(x), self.L, self.my_config.mu_, self.my_config.lambda_, lambda y: abs(self.dist(y, x) - s), lambda i1, bdg, i2: bdg >= self.my_config.budget)
+        print('Mutation step ordered', s, 'Mutation step made', value)
+        # F = lambda y, n: abs(self.dist(y, x) - s)
+        # opt = optimizationV3.UMDA(F, None, None, self.my_config, self.my_config.n_segms, self.L)
+        # y, value = opt()
+        # print(s, value)
         return y
     
 
@@ -251,7 +296,22 @@ class Config:
 
     @staticmethod
     def implemented_algorithms():
-        return frozenset(['dd-ga', 'dd-opll', 'ea-simple', 'ea-simple-cross', 'dd-ls', 'mies', 'ngopt', 'fastga-ng', 'portfolio-ng', 'bo-ng', 'dd-es', 'umda', 'umda1'])
+        return frozenset(['dd-ga', 
+                          'dd-opll', 
+                          'ea-simple', 
+                          'ea-simple-cross', 
+                          'dd-ls', 
+                          'mies', 
+                          'ngopt', 
+                          'fastga-ng', 
+                          'portfolio-ng', 
+                          'bo-ng', 
+                          'dd-es', 
+                          'umda', 
+                          'umda1', 
+                          'umda2',
+                          'umda2-dist'
+                          ])
 
     @staticmethod
     def supported_dd_mutations():
