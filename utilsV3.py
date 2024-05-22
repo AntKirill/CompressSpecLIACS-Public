@@ -306,6 +306,7 @@ class Config:
                           'fastga-ng', 
                           'portfolio-ng', 
                           'bo-ng', 
+                          'bo-sk',
                           'dd-es', 
                           'umda', 
                           'umda1', 

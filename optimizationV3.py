@@ -1,9 +1,9 @@
 from utilsV3 import *
 import argparse
-from umda import umda_Zn_minimization
 import mipego
 import nevergrad as ng
 import os
+from skopt import gp_minimize
 
 
 class Individual:
@@ -396,6 +396,20 @@ class BONevergrad(NGOptWrapper):
     def create_optimizer(self, arg):
         print('BO-NG')
         return ng.optimizers.BayesOptimBO(parametrization=arg, budget=self.config.budget)
+    
+
+class BOSKLearn(AbstractFilterSequenceOptimization):
+    def __call__(self, initial=None):
+        func = lambda x: self.F([int(i) for i in x], self.config.n_reps)
+        bounds = [(0, self.L - 1) for _ in range(self.config.n_segms)]
+        NDOE = 110
+        return gp_minimize(func, 
+                           bounds, 
+                           n_initial_points=NDOE,
+                           n_calls=self.config.budget,
+                           noise='gaussian',
+                           model_queue_size=1,
+                           verbose=True)
 
 
 class UMDA(AbstractFilterSequenceOptimization):
@@ -590,6 +604,9 @@ def run_optimization(config: Config):
         opt()
     elif config.algorithm == 'bo-ng':
         opt = BONevergrad(PFR, None, None, config)
+        opt()
+    elif config.algorithm == 'bo-sk':
+        opt = BOSKLearn(PFR, None, None, config)
         opt()
 
 
