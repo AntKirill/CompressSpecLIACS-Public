@@ -450,7 +450,7 @@ class UMDA(AbstractFilterSequenceOptimization):
         while True:
             if self.config.is_log_distr_umda:
                 self.log_distribution(self.p, gen_number)
-            if spent_budget >= self.config.budget:
+            if self.F.get_called_count() >= self.config.budget * 1000:
                 break
             pop = []
             for i in range(self.config.lambda_):
