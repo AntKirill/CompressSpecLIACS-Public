@@ -27,10 +27,15 @@ class CriteriaD:
         self.search_space_dim = 640
         self.x = None
         self.extended = extended
+        self.called_count = 0
 
     def __call__(self, original):
+        self.called_count += 1
         _, value, = self.instrument.simulateMeasurement(original, nCH4=2000, albedo=0.15, sza=70, n=1, extended=self.extended, verbose=False)
         return value
+    
+    def get_called_count(self):
+        return self.called_count
 
 
 class CriteriaF:
@@ -48,6 +53,9 @@ class CriteriaF:
 
     def get_measurements(self):
         return self.values
+    
+    def get_called_count(self):
+        return self.D.get_called_count()
 
 
 class ProfiledF:
@@ -79,6 +87,9 @@ class ProfiledF:
     @property
     def DxVar(self):
         return np.var(self.get_measurements())
+    
+    def get_called_count(self):
+        return self.of.get_called_count()
 
 
 class ReducedDimObjFunSRON:
@@ -101,6 +112,9 @@ class ReducedDimObjFunSRON:
     @property
     def instrument(self):
         return self.of.instrument
+
+    def get_called_count(self):
+        return self.of.get_called_count()
 
 
 def sort_dist_matrix(matrix):

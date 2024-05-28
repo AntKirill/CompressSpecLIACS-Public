@@ -7,16 +7,19 @@ from skopt import gp_minimize
 
 
 class Individual:
-    def __init__(self, F, x, population_number=0):
+    def __init__(self, F, x, population_number=None, simulation_runs_cnt=None):
         self.noisy_objf = F
         self.x = x
         self.objf_x_samples = np.zeros(0)
         self.population_number = population_number
+        self.simulation_runs_cnt = simulation_runs_cnt
 
     def add_samples(self, n):
         self.noisy_objf(self.x, n)
         samples = self.noisy_objf.get_measurements()
         self.objf_x_samples = np.concatenate([self.objf_x_samples, samples])
+        if not self.simulation_runs_cnt is None:
+            self.simulation_runs_cnt += n
         return self.objf_x_samples
     
     def obj_value(self):
@@ -92,15 +95,16 @@ class AbstractFilterSequenceOptimization(ABC):
     def log_population(self, population, cur_pop_number):
         if not hasattr(utils, 'logger'):
             return
-        self.diversity_measure = self.calculate_diversity(self.population)
-        pop_numbers, xs, values, sizes, pvalues = [], [], [], [], []
+        self.diversity_measure = self.calculate_diversity(population)
+        pop_numbers, xs, values, sizes, pvalues, F_evals_cnt = [], [], [], [], [], []
         for ind in population:
             xs.append(self.dim_reducer.to_original(ind.x))
             values.append(ind.obj_value())
             pop_numbers.append(ind.population_number)
             sizes.append(len(ind.objf_x_samples))
             pvalues.append(WelchTTestPvalue(ind, population[0]))
-        utils.logger.log_population(cur_pop_number, pop_numbers, xs, values, sizes, self.diversity_measure, pvalues)
+            F_evals_cnt.append(ind.simulation_runs_cnt)
+        utils.logger.log_population(cur_pop_number, pop_numbers, xs, values, sizes, self.diversity_measure, pvalues, F_evals_cnt)
 
     def choose(self, population):
         return np.random.choice(population, 2, replace=False)
@@ -434,6 +438,10 @@ class UMDA(AbstractFilterSequenceOptimization):
             for j in range(self.L):
                 p[i][j] = min(max(cnt[j] / self.config.mu_, self.lb), self.ub)
 
+    def my_selection(self, pop, mu_):
+        pop.sort(key=lambda ind: ind.obj_value())
+        return pop[:mu_]
+
     def optimize(self):
         spent_budget = 0
         best_fitness = float("inf")
@@ -447,16 +455,17 @@ class UMDA(AbstractFilterSequenceOptimization):
             pop = []
             for i in range(self.config.lambda_):
                 x = self.sample_from_distribution(self.p)
-                x_ind = Individual(self.F, x, gen_number)
+                x_ind = Individual(self.F, x, gen_number, self.F.get_called_count())
                 x_ind.add_samples(self.config.n_reps)
                 spent_budget += 1
                 pop.append(x_ind)
-            pop.sort(key=lambda ind: ind.obj_value())
+            pop = self.my_selection(pop, self.config.mu_)
             if pop[0].obj_value() < best_fitness:
                 sol = pop[0]
                 best_fitness = pop[0].obj_value()
             print(best_fitness)
             self.update_distribution(self.p, pop)
+            self.log_population(pop, gen_number)
             gen_number += 1
         return sol.x, sol.obj_value()
     
@@ -536,6 +545,35 @@ class UMDA2Dist(UMDA):
         return self.optimize()
     
 
+class UMDA2DistRobust(UMDA2Dist):
+    def select_robust_best(self, inds):
+        pos_best = 0
+        for i in range(len(inds)):
+            if i == pos_best:
+                continue
+            while True:
+                pvalue = WelchTTestPvalue(inds[pos_best], inds[i])
+                if pvalue < self.MAXSIGNIFICANCE or pvalue > 1 - self.MAXSIGNIFICANCE:
+                    break
+                to_add_pos = pos_best
+                if len(inds[pos_best].objf_x_samples) > len(inds[i].objf_x_samples):
+                    to_add_pos = i
+                if len(inds[to_add_pos].objf_x_samples) < self.MAXSAMPLES:
+                    inds[to_add_pos].add_samples(self.SAMPLESINC)
+                else:
+                    break
+            if pvalue < self.MAXSIGNIFICANCE:
+                if inds[pos_best].obj_value() > inds[i].obj_value():
+                    pos_best = i
+            else:
+                pos_best = np.random.choice([i, pos_best])
+        return pos_best
+    
+    def my_selection(self, pop, mu_):
+        pop.sort(key=lambda ind: ind.obj_value())
+        return self.robust_survival_selection(pop, [], mu_)
+    
+
 class UMDA2(UMDA2Dist):
     def sample_from_distribution(self, p):
         x = np.zeros(self.config.n_segms, dtype=int)
@@ -581,7 +619,13 @@ def run_optimization(config: Config):
         opt()
     elif config.algorithm == 'umda2-dist':
         dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
-        opt = UMDA2Dist(PFR, dist_matrix, None, config)
+        dist = utils.create_distance(PFR, dist_matrix, config.d1_method)
+        if config.robustness == 'fixed':
+            opt = UMDA2Dist(PFR, dist_matrix, dist, config)
+        elif config.robustness == 'welch':
+            opt = UMDA2DistRobust(PFR, dist_matrix, dist, config)
+        else:
+            raise ValueError(f'Robustness mode {config.robustness} is not implemented yet')
         opt()
     elif config.algorithm == 'ea-simple':
         # solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)

@@ -81,15 +81,15 @@ class MyLogger:
        with open(f'{self.folder_name}/config.json', 'w') as f:
            f.write(config.to_json())
 
-    def log_population(self, cur_pop_number, pop_numbers, genotypes, obj_values, sample_sizes, diversity, pvalues):
+    def log_population(self, cur_pop_number, pop_numbers, genotypes, obj_values, sample_sizes, diversity, pvalues, F_evals_cnt):
         if not os.path.exists(self.log_populations_full_path):
             self.log_column_names()
             if self.verbose:
                 print(f'Logging to {self.folder_name}')
         with open(self.log_populations_full_path, 'a') as file:
             print('Best-so-far (pop):', min(obj_values), flush=True)
-            for sample_size, number, x, value, pvalue in zip(sample_sizes, pop_numbers, genotypes, obj_values, pvalues):
-                print(value, sample_size, cur_pop_number, number, pvalue, diversity, *x, sep=' ', file=file)
+            for sample_size, number, x, value, pvalue, fevals in zip(sample_sizes, pop_numbers, genotypes, obj_values, pvalues, F_evals_cnt):
+                print(fevals, value, sample_size, cur_pop_number, number, pvalue, diversity, *x, sep=' ', file=file)
 
     def log_column_names(self):
         with open(self.log_file_full_path, 'w') as f:
@@ -102,7 +102,7 @@ class MyLogger:
                     f.write(f' x{i}')
             f.write('\n')
         with open(self.log_populations_full_path, 'a') as file:
-            print('value', 'sample_size', 'pop_number_current', 'pop_number_creation', 'pvalue_vs_best', 'diversity', sep=' ', end='', file=file)
+            print('simulation_runs_cnt', 'value', 'sample_size', 'pop_number_current', 'pop_number_creation', 'pvalue_vs_best', 'diversity', sep=' ', end='', file=file)
             for i in range(self.problem_dim):
                 print(f' x{i}', end='', file=file)
             print(file=file)
