@@ -42,11 +42,12 @@ def main(dir):
     with open(os.path.join(dir, 'processed.csv'), 'w') as file:
         # argmin_components = [f'argmin_x{i}' for i in range(640)]
         evals_in_instance_headers = [f'eval_in_instance_{i}' for i in range(MAXCNT)]
-        print('experiment_root', 'iteration', 'mean', 'std', 'mean_best_so_far', 'std_best_so_far', 'cnt', *evals_in_instance_headers, file=file)
+        print('experiment_root', 'iteration', 'mean', 'std', 'mean_best_so_far', 'std_best_so_far', 'mean_diversity', 'std_diversity', 'cnt', *evals_in_instance_headers, file=file)
         for iteration in range(1, M + 1):
             lc = df.loc[df['evaluations'] == iteration]
             vals = lc['raw_y'].to_numpy()
             instances = lc['instance'].to_numpy(dtype=int)
+            diversities = lc['Diversity'].to_numpy(dtype=float)
             instance_cur_value = np.full(MAXCNT, INF)
             for j in instances:
                 instance_cur_value[j] = lc.loc[lc['instance'] == j]['raw_y'].to_numpy(dtype=float)[0]
@@ -56,7 +57,7 @@ def main(dir):
             std_best_so_far = np.std(iteration_best_so_far)
             # argmin = np.argmin(vals)
             # best = lc.loc[:, 'x0':'x639'].iloc[argmin].to_numpy(dtype=int) #.loc[:, 'x0':'x639']
-            print(dir, iteration, np.mean(vals), np.std(vals), mean_best_so_far, std_best_so_far, len(vals), *instance_cur_value, file=file)
+            print(dir, iteration, np.mean(vals), np.std(vals), mean_best_so_far, std_best_so_far, np.nanmean(diversities), np.nanstd(diversities), len(vals), *instance_cur_value, file=file)
 
 
 if __name__ == '__main__':
