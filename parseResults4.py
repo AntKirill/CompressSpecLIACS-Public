@@ -21,7 +21,6 @@ def read_data_frame(experiment_root, th_value):
             instance = int(os.path.basename(item).split('-')[1])
             for root, directories, files in os.walk(fullpath):
                 for filename in files:
-                    print(filename)
                     if filename.endswith('.dat'):
                         filepath = os.path.join(root, filename)
                         df = pd.read_csv(filepath, sep=' ')
@@ -61,7 +60,7 @@ def main(dir):
     config.d0_method = '2'
     config.d1_method = 'kirill'
     config.n_segms = 16
-    TH_DIST = 0.1 # d0_method = '2', d1_method = 'kirill'
+    TH_DIST = 0.05 # d0_method = '2', d1_method = 'kirill'
     TH_OBJ = 0.0003 # sron_guess_obj / 2
 
     designs, obj_values = read_data_frame(dir, TH_OBJ)
