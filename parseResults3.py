@@ -33,8 +33,8 @@ def main(dir):
     config.d0_method = '2'
     config.d1_method = 'kirill'
     config.n_segms = 16
-    TH_DIST = 0.01 # d0_method = '2', d1_method = 'kirill'
-    TH_OBJ = 0.0006 # sron_guess_obj / 2
+    TH_DIST = 0.05 # d0_method = '2', d1_method = 'kirill'
+    TH_OBJ = 0.0003 # sron_guess_obj / 2
 
     D = utilsV3.CriteriaD()
     F = utilsV3.CriteriaF(D)
