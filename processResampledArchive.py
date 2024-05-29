@@ -13,7 +13,7 @@ def main(experiment_root):
     for item in os.listdir(experiment_root):
         fullpath = os.path.join(experiment_root, item)
         if os.path.isfile(fullpath) and item.startswith('samples_for_'):
-            id = item.split('_')[4]
+            id = int(item.split('_')[4])
             with open(fullpath, 'r') as file:
                 for row in file:
                     sp = row.split(' ')
@@ -23,6 +23,7 @@ def main(experiment_root):
                     design_ids.append(id)
                     designs_data.append([id, n, samples])
                     nums.append(n)
+                    id += 1
     with open(os.path.join(experiment_root, 'merged_samples'), 'w') as file:
         for d in designs_data:
             print(d[0], d[1], *d[2], file=file)
