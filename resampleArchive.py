@@ -18,8 +18,10 @@ def process_row_k(F, filepath, kFrom, kTo):
             obj_value, design = row[0], [int(i) for i in row[1:]]
             obj_value1 = F(design, 10000)
             samples = F.get_measurements()
-            print('Old', obj_value, 'New', obj_value1)
-            print(*design, *samples, file=file)
+            print('Old:', obj_value)
+            print('New:', obj_value1)
+            print('k:', k, flush=True)
+            print(*design, *samples, file=file, flush=True)
 
 
 def main(filepath, kFrom, kToIncl):
