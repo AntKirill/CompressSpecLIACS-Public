@@ -323,6 +323,7 @@ class EASimple(AbstractFilterSequenceOptimization):
             all_population = np.concatenate((population, next_population)).tolist()
             all_population.sort(key=lambda ind: ind.obj_value())
             population = all_population[:self.config.mu_]
+            self.diversity_measure = self.calculate_diversity(population)
             population_number += 1
         population.sort(key=lambda ind: ind.obj_value())
         return population[0]
@@ -460,6 +461,7 @@ class UMDA(AbstractFilterSequenceOptimization):
                 spent_budget += 1
                 pop.append(x_ind)
             pop = self.my_selection(pop, self.config.mu_)
+            self.diversity_measure = self.calculate_diversity(pop)
             if pop[0].obj_value() < best_fitness:
                 sol = pop[0]
                 best_fitness = pop[0].obj_value()
