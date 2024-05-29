@@ -630,11 +630,14 @@ def run_optimization(config: Config):
             raise ValueError(f'Robustness mode {config.robustness} is not implemented yet')
         opt()
     elif config.algorithm == 'ea-simple':
-        # solution = ea_simple(PFR, config, config.n_segms, config.mu_, config.lambda_, lambda i1, s, i2: s > config.budget)
-        opt = EASimple(PFR, None, None, config)
+        dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
+        dist = utils.create_distance(PFR, dist_matrix, config.d1_method)
+        opt = EASimple(PFR, None, dist, config)
         opt()
     elif config.algorithm == 'ea-simple-cross':
-        opt = EASimpleWithCrossover(PFR, None, None, config)
+        dist_matrix = utils.create_dist_matrix(PFR, config.d0_method)
+        dist = utils.create_distance(PFR, dist_matrix, config.d1_method)
+        opt = EASimpleWithCrossover(PFR, None, dist, config)
         opt()
     elif config.algorithm == 'mies':
         opt = MIES(PFR, None, None, config)
