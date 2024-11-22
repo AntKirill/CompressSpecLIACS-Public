@@ -32,7 +32,7 @@ Code contributions:
 
 ### Running the Optimization
 
-To optimize filter selection using the top-performing algorithm "UMDA-U-PLS-Dist, \(d_1\)" as described in [1], execute the following command:  
+To optimize filter selection using the top-performing algorithm "UMDA-U-PLS-Dist, $d_1$" as described in [1], execute the following command:  
 
 ```bash
 python optimizationV3.py -a umda2-dist \
