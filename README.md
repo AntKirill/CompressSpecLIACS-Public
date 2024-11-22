@@ -49,8 +49,8 @@ python optimizationV3.py -a umda2-dist \
 ```
 
 **Notes:**  
-- The parameter `--d0_method 2` corresponds to distance metric \(d_1\).  
-- Use `--d0_method 3` for \(d_2\) (due to historical reasons).  
+- The parameter `--d0_method 2` corresponds to distance metric $d_1$.  
+- Use `--d0_method 3` for $d_2$ (due to historical reasons).  
 
 ## References
 
