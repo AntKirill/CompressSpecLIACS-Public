@@ -1,0 +1,2 @@
+precomputedFiltersDists/method3.txt filter=lfs diff=lfs merge=lfs -text
+precomputedFiltersDists/method2.txt filter=lfs diff=lfs merge=lfs -text
